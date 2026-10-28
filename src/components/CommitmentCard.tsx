@@ -106,14 +106,14 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold text-slate-800 truncate leading-snug">
+            <div className="flex items-start gap-2">
+              <h3 className="text-base font-bold text-slate-800 line-clamp-2 leading-snug">
                 {commitment.title}
               </h3>
               {commitment.isPinned && (
                 <span
                   title={lang === 'ar' ? 'مثبت في الأعلى' : 'Pinned'}
-                  className="p-1 rounded-md bg-teal-100/70 text-teal-700 shrink-0"
+                  className="p-1 rounded-md bg-teal-100/70 text-teal-700 shrink-0 mt-0.5"
                 >
                   <Pin className="w-3 h-3 rotate-45" />
                 </span>
