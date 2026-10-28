@@ -10,6 +10,13 @@ function userDoc(uid: string, collectionName: SyncCollection, id: string) {
   return doc(db, 'users', uid, collectionName, id);
 }
 
+// Firestore rejects `undefined` field values (thrown synchronously). Local
+// objects sometimes carry them for optional fields (e.g. an empty checklist),
+// so strip them before every write instead of letting them crash the caller.
+function sanitize<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
 // Mirrors every local write to Firestore while a user is signed in.
 export function startSync(uid: string): void {
   activeUid = uid;
@@ -19,7 +26,7 @@ export function startSync(uid: string): void {
     if (event.op === 'delete') {
       deleteDoc(ref).catch((e) => console.warn('sync delete failed', e));
     } else {
-      setDoc(ref, event.data).catch((e) => console.warn('sync write failed', e));
+      setDoc(ref, sanitize(event.data)).catch((e) => console.warn('sync write failed', e));
     }
   });
 }
@@ -70,10 +77,10 @@ export async function pushAllLocalData(uid: string): Promise<void> {
   ]);
 
   const batch = writeBatch(db);
-  commitments.forEach((c) => batch.set(userDoc(uid, 'commitments', c.id), c));
-  occurrences.forEach((o) => batch.set(userDoc(uid, 'occurrences', o.id), o));
-  categories.forEach((cat) => batch.set(userDoc(uid, 'categories', cat.id), cat));
-  notes.forEach((n) => batch.set(userDoc(uid, 'notes', n.id), n));
-  importHistory.forEach((h) => batch.set(userDoc(uid, 'importHistory', h.id), h));
+  commitments.forEach((c) => batch.set(userDoc(uid, 'commitments', c.id), sanitize(c)));
+  occurrences.forEach((o) => batch.set(userDoc(uid, 'occurrences', o.id), sanitize(o)));
+  categories.forEach((cat) => batch.set(userDoc(uid, 'categories', cat.id), sanitize(cat)));
+  notes.forEach((n) => batch.set(userDoc(uid, 'notes', n.id), sanitize(n)));
+  importHistory.forEach((h) => batch.set(userDoc(uid, 'importHistory', h.id), sanitize(h)));
   await batch.commit();
 }

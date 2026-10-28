@@ -46,6 +46,15 @@ class StorageService {
     this.changeListener = listener;
   }
 
+  // A failure in the (external) sync listener must never break local-first storage.
+  private notifyChange(event: SyncChangeEvent): void {
+    try {
+      this.changeListener?.(event);
+    } catch (e) {
+      console.warn('Sync listener failed', e);
+    }
+  }
+
   private initDB(): Promise<IDBDatabase> {
     if (this.dbPromise) return this.dbPromise;
 
@@ -333,7 +342,7 @@ class StorageService {
     if (idx >= 0) list[idx] = commitment;
     else list.push(commitment);
     localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
-    this.changeListener?.({ collection: 'commitments', op: 'put', id: commitment.id, data: commitment });
+    this.notifyChange({ collection: 'commitments', op: 'put', id: commitment.id, data: commitment });
   }
 
   public async deleteCommitment(id: string): Promise<void> {
@@ -349,14 +358,14 @@ class StorageService {
     }
     const list = this.getCommitmentsLS().filter((c) => c.id !== id);
     localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
-    this.changeListener?.({ collection: 'commitments', op: 'delete', id });
+    this.notifyChange({ collection: 'commitments', op: 'delete', id });
 
     const allOccs = this.getOccurrencesLS();
     const removedOccs = allOccs.filter((o) => o.commitmentId === id);
     const occs = allOccs.filter((o) => o.commitmentId !== id);
     localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(occs));
     for (const o of removedOccs) {
-      this.changeListener?.({ collection: 'occurrences', op: 'delete', id: o.id });
+      this.notifyChange({ collection: 'occurrences', op: 'delete', id: o.id });
     }
   }
 
@@ -403,7 +412,7 @@ class StorageService {
     if (idx >= 0) list[idx] = occurrence;
     else list.push(occurrence);
     localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(list));
-    this.changeListener?.({ collection: 'occurrences', op: 'put', id: occurrence.id, data: occurrence });
+    this.notifyChange({ collection: 'occurrences', op: 'put', id: occurrence.id, data: occurrence });
   }
 
   // --- Categories ---
@@ -444,7 +453,7 @@ class StorageService {
     if (idx >= 0) cats[idx] = category;
     else cats.push(category);
     localStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify(cats));
-    this.changeListener?.({ collection: 'categories', op: 'put', id: category.id, data: category });
+    this.notifyChange({ collection: 'categories', op: 'put', id: category.id, data: category });
   }
 
   // --- Notes (Archive & Zoho) ---
@@ -486,7 +495,7 @@ class StorageService {
     if (idx >= 0) list[idx] = note;
     else list.push(note);
     localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(list));
-    this.changeListener?.({ collection: 'notes', op: 'put', id: note.id, data: note });
+    this.notifyChange({ collection: 'notes', op: 'put', id: note.id, data: note });
   }
 
   public async deleteNote(id: string): Promise<void> {
@@ -501,7 +510,7 @@ class StorageService {
     }
     const list = this.getNotesLS().filter((n) => n.id !== id);
     localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(list));
-    this.changeListener?.({ collection: 'notes', op: 'delete', id });
+    this.notifyChange({ collection: 'notes', op: 'delete', id });
   }
 
   // --- Import History ---
@@ -541,7 +550,7 @@ class StorageService {
     const list = this.getImportHistoryLS();
     list.unshift(item);
     localStorage.setItem(LS_KEYS.IMPORT_HISTORY, JSON.stringify(list));
-    this.changeListener?.({ collection: 'importHistory', op: 'put', id: item.id, data: item });
+    this.notifyChange({ collection: 'importHistory', op: 'put', id: item.id, data: item });
   }
 
   // --- Settings ---

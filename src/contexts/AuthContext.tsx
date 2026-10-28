@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  User,
+} from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { pullRemoteData, pushAllLocalData, startSync, stopSync } from '../services/sync';
 
@@ -9,6 +17,9 @@ interface AuthContextValue {
   syncing: boolean;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -50,7 +61,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (e: any) {
-      setAuthError(e?.message || 'Sign-in failed');
+      setAuthError(e?.code || e?.message || 'Sign-in failed');
+      throw e;
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e: any) {
+      setAuthError(e?.code || e?.message || 'Sign-in failed');
+      throw e;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    setAuthError(null);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (e: any) {
+      setAuthError(e?.code || e?.message || 'Sign-up failed');
+      throw e;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    setAuthError(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (e: any) {
+      setAuthError(e?.code || e?.message || 'Reset failed');
       throw e;
     }
   };
@@ -60,7 +101,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, syncing, authError, signInWithGoogle, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        syncing,
+        authError,
+        signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
+        resetPassword,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
