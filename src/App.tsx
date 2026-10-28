@@ -531,7 +531,7 @@ function AppContent() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {visibleCommitments.map((comm) => {
                   const occ = occurrences.find(
                     (o) => o.commitmentId === comm.id && o.yearMonth === currentYearMonth
