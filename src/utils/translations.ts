@@ -2,6 +2,19 @@ export const translations = {
   ar: {
     appName: 'التزاماتي',
     appTagline: 'إدارة التزاماتك الشهرية بسهولة.',
+    auth: {
+      signInTitle: 'سجّل الدخول للمتابعة',
+      signInSubtitle: 'سجّل دخولك بحساب Google لحفظ التزاماتك ومزامنتها بين جميع أجهزتك.',
+      signInButton: 'تسجيل الدخول بحساب Google',
+      signingIn: 'جاري تسجيل الدخول...',
+      syncingTitle: 'جاري مزامنة بياناتك...',
+      syncingSubtitle: 'لحظات ونكون جاهزين.',
+      signInError: 'تعذر تسجيل الدخول، حاول مرة أخرى.',
+      accountTitle: 'الحساب والمزامنة',
+      signedInAs: 'تم تسجيل الدخول باسم',
+      syncedDesc: 'بياناتك محفوظة ومتزامنة تلقائياً مع حسابك على كل أجهزتك.',
+      signOut: 'تسجيل الخروج',
+    },
     tabs: {
       commitments: 'الالتزامات',
       dashboard: 'لوحة المتابعة',
@@ -175,6 +188,19 @@ export const translations = {
   en: {
     appName: 'My Commitments',
     appTagline: 'Manage your monthly obligations effortlessly.',
+    auth: {
+      signInTitle: 'Sign in to continue',
+      signInSubtitle: 'Sign in with Google to save your commitments and sync them across all your devices.',
+      signInButton: 'Sign in with Google',
+      signingIn: 'Signing in...',
+      syncingTitle: 'Syncing your data...',
+      syncingSubtitle: 'Just a moment.',
+      signInError: 'Could not sign in, please try again.',
+      accountTitle: 'Account & Sync',
+      signedInAs: 'Signed in as',
+      syncedDesc: 'Your data is automatically saved and synced with your account across all devices.',
+      signOut: 'Sign out',
+    },
     tabs: {
       commitments: 'Commitments',
       dashboard: 'Dashboard',

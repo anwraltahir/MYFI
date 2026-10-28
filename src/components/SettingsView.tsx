@@ -5,6 +5,7 @@ import { CURRENCIES } from '../utils/constants';
 import { storage } from '../services/storage';
 import { notificationService } from '../services/notifications';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Globe,
   Coins,
@@ -16,6 +17,7 @@ import {
   CheckCircle2,
   Smartphone,
   ShieldAlert,
+  LogOut,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -38,6 +40,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const t = translations[lang];
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { isInstallable, isInstalled, install, isIOS } = usePWAInstall();
+  const { user, logout } = useAuth();
 
   const [notificationStatus, setNotificationStatus] = useState<string>(
     notificationService.getPermission()
@@ -118,6 +121,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
           {t.settings.title}
         </h2>
+      </div>
+
+      {/* Account & Sync */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
+        <h3 className="text-sm font-bold text-slate-800 mb-4">{t.auth.accountTitle}</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {user?.photoURL ? (
+              <img src={user.photoURL} alt={user.displayName || ''} className="w-10 h-10 rounded-2xl object-cover" />
+            ) : (
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                {(user?.displayName || user?.email || '?').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <div className="text-xs text-slate-400">{t.auth.signedInAs}</div>
+              <div className="text-sm font-bold text-slate-800">{user?.displayName || user?.email}</div>
+              <div className="text-[11px] text-slate-400 mt-0.5 max-w-xs">{t.auth.syncedDesc}</div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => logout()}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-xs font-bold border border-slate-200 transition shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>{t.auth.signOut}</span>
+          </button>
+        </div>
       </div>
 
       {/* Zoho Notebook Import Center Showcase Card */}

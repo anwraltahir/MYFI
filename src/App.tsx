@@ -22,9 +22,29 @@ import { NotesArchiveView } from './components/NotesArchiveView';
 import { SettingsView } from './components/SettingsView';
 import { ZohoImportModal } from './components/ZohoImportModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { LoginScreen } from './components/LoginScreen';
+import { SplashScreen } from './components/SplashScreen';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Plus, Search, Filter, ArrowUpDown } from 'lucide-react';
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
+
+function AuthGate() {
+  const { user, loading, syncing } = useAuth();
+  const lang: Language = storage.getSettings().language || 'ar';
+
+  if (loading || syncing) return <SplashScreen lang={lang} syncing={syncing} />;
+  if (!user) return <LoginScreen lang={lang} />;
+  return <AppContent />;
+}
+
+function AppContent() {
   const [isPending, startTransition] = useTransition();
 
   // Core Data

@@ -24,14 +24,26 @@ const LS_KEYS = {
   LAST_BACKUP: 'eltizamati_last_backup',
 };
 
+export type SyncCollection = 'commitments' | 'occurrences' | 'categories' | 'notes' | 'importHistory';
+export type SyncChangeEvent =
+  | { collection: SyncCollection; op: 'put'; id: string; data: any }
+  | { collection: SyncCollection; op: 'delete'; id: string };
+export type SyncChangeListener = (event: SyncChangeEvent) => void;
+
 class StorageService {
   private dbPromise: Promise<IDBDatabase> | null = null;
   private hasIndexedDB = typeof window !== 'undefined' && 'indexedDB' in window;
+  private changeListener: SyncChangeListener | null = null;
 
   constructor() {
     if (this.hasIndexedDB) {
       this.initDB();
     }
+  }
+
+  // Lets the sync service observe local writes so it can mirror them to Firestore.
+  public setChangeListener(listener: SyncChangeListener | null): void {
+    this.changeListener = listener;
   }
 
   private initDB(): Promise<IDBDatabase> {
@@ -321,6 +333,7 @@ class StorageService {
     if (idx >= 0) list[idx] = commitment;
     else list.push(commitment);
     localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
+    this.changeListener?.({ collection: 'commitments', op: 'put', id: commitment.id, data: commitment });
   }
 
   public async deleteCommitment(id: string): Promise<void> {
@@ -336,9 +349,15 @@ class StorageService {
     }
     const list = this.getCommitmentsLS().filter((c) => c.id !== id);
     localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
+    this.changeListener?.({ collection: 'commitments', op: 'delete', id });
 
-    const occs = this.getOccurrencesLS().filter((o) => o.commitmentId !== id);
+    const allOccs = this.getOccurrencesLS();
+    const removedOccs = allOccs.filter((o) => o.commitmentId === id);
+    const occs = allOccs.filter((o) => o.commitmentId !== id);
     localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(occs));
+    for (const o of removedOccs) {
+      this.changeListener?.({ collection: 'occurrences', op: 'delete', id: o.id });
+    }
   }
 
   // --- Occurrences ---
@@ -384,6 +403,7 @@ class StorageService {
     if (idx >= 0) list[idx] = occurrence;
     else list.push(occurrence);
     localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(list));
+    this.changeListener?.({ collection: 'occurrences', op: 'put', id: occurrence.id, data: occurrence });
   }
 
   // --- Categories ---
@@ -424,6 +444,7 @@ class StorageService {
     if (idx >= 0) cats[idx] = category;
     else cats.push(category);
     localStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify(cats));
+    this.changeListener?.({ collection: 'categories', op: 'put', id: category.id, data: category });
   }
 
   // --- Notes (Archive & Zoho) ---
@@ -465,6 +486,7 @@ class StorageService {
     if (idx >= 0) list[idx] = note;
     else list.push(note);
     localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(list));
+    this.changeListener?.({ collection: 'notes', op: 'put', id: note.id, data: note });
   }
 
   public async deleteNote(id: string): Promise<void> {
@@ -479,6 +501,7 @@ class StorageService {
     }
     const list = this.getNotesLS().filter((n) => n.id !== id);
     localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(list));
+    this.changeListener?.({ collection: 'notes', op: 'delete', id });
   }
 
   // --- Import History ---
@@ -518,6 +541,7 @@ class StorageService {
     const list = this.getImportHistoryLS();
     list.unshift(item);
     localStorage.setItem(LS_KEYS.IMPORT_HISTORY, JSON.stringify(list));
+    this.changeListener?.({ collection: 'importHistory', op: 'put', id: item.id, data: item });
   }
 
   // --- Settings ---
