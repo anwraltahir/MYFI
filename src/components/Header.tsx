@@ -80,28 +80,6 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, lang })
           </div>
         </div>
       </div>
-
-      {/* Mobile Horizontal Navigation Tabs */}
-      <div className="md:hidden flex overflow-x-auto no-scrollbar px-3 py-1.5 border-t border-slate-100 gap-1.5 bg-slate-50/50">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onSelectTab(item.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
-                isActive
-                  ? 'bg-white text-teal-700 shadow-xs border border-teal-200/80 font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
     </header>
   );
 };

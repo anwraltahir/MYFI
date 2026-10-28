@@ -9,6 +9,7 @@ import { storage } from './services/storage';
 import { notificationService } from './services/notifications';
 import { translations, Language } from './utils/translations';
 import { Header } from './components/Header';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { MonthSelector } from './components/MonthSelector';
 import { SummaryCard } from './components/SummaryCard';
 import { CommitmentCard } from './components/CommitmentCard';
@@ -372,7 +373,7 @@ function AppContent() {
   const primaryCurrency = commitments[0]?.currency || settings.currency || 'QAR';
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-24 md:pb-16 flex flex-col">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-36 md:pb-16 flex flex-col">
       {/* Top Header */}
       <Header
         currentTab={currentTab}
@@ -638,7 +639,7 @@ function AppContent() {
 
       {/* Floating Action Button (FAB) on Mobile and Desktop for Adding Commitment */}
       {currentTab === 'commitments' && (
-        <div className="fixed bottom-6 right-6 rtl:right-auto rtl:left-6 z-30">
+        <div className="fixed bottom-20 right-6 rtl:right-auto rtl:left-6 md:bottom-6 z-30">
           <button
             onClick={() => {
               setEditingCommitment(null);
@@ -684,6 +685,9 @@ function AppContent() {
         title={deletingCommitment?.title || ''}
         lang={lang}
       />
+
+      {/* Mobile Bottom Tab Bar */}
+      <MobileBottomNav currentTab={currentTab} onSelectTab={setCurrentTab} lang={lang} />
     </div>
   );
 }
