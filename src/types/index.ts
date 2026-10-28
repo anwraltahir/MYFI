@@ -46,17 +46,8 @@ export interface NoteItem {
   checklist?: { id: string; text: string; done: boolean }[];
   createdAt: string;
   updatedAt: string;
-  source: 'zoho' | 'manual';
+  source: 'manual';
   convertedToCommitmentId?: string;
-}
-
-export interface ImportHistoryItem {
-  id: string;
-  date: string;
-  sourceName: string;
-  notesCount: number;
-  commitmentsCount: number;
-  status: 'completed' | 'failed';
 }
 
 export interface UserSettings {
@@ -65,28 +56,4 @@ export interface UserSettings {
   firstDayOfMonth: number;
   notificationsEnabled: boolean;
   reminderDaysBefore: number; // 1, 3, 7
-}
-
-export interface DetectedObligation {
-  id: string;
-  originalNote: NoteItem;
-  detectedTitle: string;
-  detectedAmount: number;
-  detectedCurrency: string;
-  detectedDueDay: number;
-  detectedCategory: string;
-  detectedFrequency: RecurrenceType;
-  confidence: number;
-  selected: boolean;
-}
-
-export interface ParsedImportResult {
-  notes: NoteItem[];
-  detectedObligations: DetectedObligation[];
-  duplicates: {
-    note: NoteItem;
-    existingNoteId: string;
-  }[];
-  fileType: string;
-  fileName: string;
 }

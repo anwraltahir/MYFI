@@ -186,9 +186,7 @@ export const NotesArchiveView: React.FC<NotesArchiveViewProps> = ({
           <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h3 className="text-base font-bold text-slate-700">{t.notesArchive.emptyArchive}</h3>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            {lang === 'ar'
-              ? 'يمكنك استيراد ملفاتك القديمة من Zoho Notebook عبر قسم الإعدادات أو إضافة ملاحظة جديدة هنا.'
-              : 'You can import your past Zoho Notebook exports in Settings or add a new note here.'}
+            {lang === 'ar' ? 'أضف ملاحظة جديدة هنا لتبدأ أرشيفك الشخصي.' : 'Add a new note here to start your personal archive.'}
           </p>
         </div>
       ) : (
@@ -216,13 +214,8 @@ export const NotesArchiveView: React.FC<NotesArchiveViewProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-2.5 py-1 rounded-xl bg-teal-50 text-teal-800 font-bold text-[11px] flex items-center gap-1 border border-teal-100">
                         <BookOpen className="w-3 h-3 text-teal-600" />
-                        <span>{note.notebook || 'Zoho Notebook'}</span>
+                        <span>{note.notebook || t.notesArchive.title}</span>
                       </span>
-                      {note.source === 'zoho' && (
-                        <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold">
-                          Zoho
-                        </span>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-1">

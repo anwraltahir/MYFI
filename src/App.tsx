@@ -20,7 +20,6 @@ import { HistoryView } from './components/HistoryView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { NotesArchiveView } from './components/NotesArchiveView';
 import { SettingsView } from './components/SettingsView';
-import { ZohoImportModal } from './components/ZohoImportModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { LoginScreen } from './components/LoginScreen';
 import { SplashScreen } from './components/SplashScreen';
@@ -80,8 +79,6 @@ function AppContent() {
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingCommitment, setDeletingCommitment] = useState<Commitment | null>(null);
-
-  const [zohoImportOpen, setZohoImportOpen] = useState(false);
 
   // Initialize and load data
   const loadAllData = async () => {
@@ -613,7 +610,7 @@ function AppContent() {
           />
         )}
 
-        {/* VIEW 5: NOTES ARCHIVE (أرشيف الملاحظات من Zoho) */}
+        {/* VIEW 5: NOTES ARCHIVE */}
         {currentTab === 'archive' && (
           <NotesArchiveView
             notes={notes}
@@ -633,7 +630,6 @@ function AppContent() {
               storage.saveSettings(newSettings);
             }}
             lang={lang}
-            onOpenZohoImport={() => setZohoImportOpen(true)}
             onResetAllData={handleResetAllData}
             onDataImported={loadAllData}
           />
@@ -686,16 +682,6 @@ function AppContent() {
         onClose={() => setDeleteConfirmOpen(false)}
         onConfirm={handleDeleteCommitment}
         title={deletingCommitment?.title || ''}
-        lang={lang}
-      />
-
-      {/* Zoho Notebook Import Modal */}
-      <ZohoImportModal
-        isOpen={zohoImportOpen}
-        onClose={() => setZohoImportOpen(false)}
-        onImportComplete={loadAllData}
-        existingNotes={notes}
-        existingCommitments={commitments}
         lang={lang}
       />
     </div>

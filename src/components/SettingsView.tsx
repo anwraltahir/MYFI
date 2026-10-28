@@ -13,7 +13,6 @@ import {
   Download,
   Upload,
   Trash2,
-  Layers,
   CheckCircle2,
   Smartphone,
   ShieldAlert,
@@ -24,7 +23,6 @@ interface SettingsViewProps {
   settings: UserSettings;
   onUpdateSettings: (newSettings: UserSettings) => void;
   lang: Language;
-  onOpenZohoImport: () => void;
   onResetAllData: () => void;
   onDataImported: () => void;
 }
@@ -33,7 +31,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onUpdateSettings,
   lang,
-  onOpenZohoImport,
   onResetAllData,
   onDataImported,
 }) => {
@@ -51,7 +48,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isCleaningZohoTest, setIsCleaningZohoTest] = useState(false);
   const [cleanupDone, setCleanupDone] = useState(false);
 
-  const KEPT_SEED_NOTE_IDS = new Set(['note-zoho-sample-1', 'note-zoho-sample-2']);
+  const KEPT_SEED_NOTE_IDS = new Set(['note-zoho-sample-1', 'note-zoho-sample-2', 'note-sample-1', 'note-sample-2']);
 
   const countZohoTestData = async () => {
     const [commitments, notes] = await Promise.all([storage.getCommitments(), storage.getNotes()]);
@@ -185,32 +182,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>{t.auth.signOut}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Zoho Notebook Import Center Showcase Card */}
-      <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-teal-900 text-white rounded-3xl p-6 shadow-md relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-teal-200 text-[11px] font-bold">
-              <Layers className="w-3.5 h-3.5" />
-              <span>{lang === 'ar' ? 'مركز الاستيراد والترحيل' : 'Import Center'}</span>
-            </span>
-            <h3 className="text-lg sm:text-xl font-bold">
-              {t.zohoImport.sectionTitle}
-            </h3>
-            <p className="text-teal-100 text-xs sm:text-sm max-w-lg">
-              {t.zohoImport.sectionSubtitle}
-            </p>
-          </div>
-
-          <button
-            onClick={onOpenZohoImport}
-            className="self-start sm:self-auto px-5 py-2.5 rounded-2xl bg-white text-teal-800 hover:bg-teal-50 text-xs font-bold transition shadow-sm flex items-center gap-2 active:scale-95 shrink-0"
-          >
-            <Upload className="w-4 h-4 text-teal-600" />
-            <span>{t.zohoImport.ctaButton}</span>
           </button>
         </div>
       </div>
@@ -438,12 +409,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-rose-100">
             <div>
               <div className="text-xs font-bold text-slate-800">
-                {lang === 'ar' ? 'تنظيف بيانات تجربة استيراد Zoho' : 'Clean up Zoho import test data'}
+                {lang === 'ar' ? 'تنظيف بيانات الاستيراد القديمة' : 'Clean up old import data'}
               </div>
               <div className="text-[11px] text-slate-400 max-w-sm">
                 {lang === 'ar'
-                  ? `تم رصد ${zohoTestCount} عنصر من محاولات استيراد سابقة (قبل إصلاح المزامنة). هذا يحذفها فقط، بدون المساس بأي بيانات أضفتها يدوياً.`
-                  : `${zohoTestCount} items detected from earlier import test runs (before the sync fix). This only removes those, your manually added data is untouched.`}
+                  ? `تم رصد ${zohoTestCount} عنصر متبقٍّ من ميزة استيراد Zoho التي تمت إزالتها من الموقع. هذا يحذفها فقط، بدون المساس بأي بيانات أضفتها يدوياً.`
+                  : `${zohoTestCount} leftover items found from the Zoho import feature that was removed from the site. This only removes those, your manually added data is untouched.`}
               </div>
               {cleanupDone && (
                 <div className="text-[11px] text-emerald-600 font-bold mt-1">

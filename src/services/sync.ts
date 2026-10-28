@@ -2,7 +2,7 @@ import { collection, deleteDoc, doc, getDocs, setDoc, writeBatch } from 'firebas
 import { db } from './firebase';
 import { storage, SyncCollection } from './storage';
 
-const COLLECTIONS: SyncCollection[] = ['commitments', 'occurrences', 'categories', 'notes', 'importHistory'];
+const COLLECTIONS: SyncCollection[] = ['commitments', 'occurrences', 'categories', 'notes'];
 
 let activeUid: string | null = null;
 
@@ -57,9 +57,6 @@ export async function pullRemoteData(uid: string): Promise<boolean> {
         case 'notes':
           await storage.saveNote(data as any);
           break;
-        case 'importHistory':
-          await storage.addImportHistory(data as any);
-          break;
       }
     }
   }
@@ -68,12 +65,11 @@ export async function pullRemoteData(uid: string): Promise<boolean> {
 
 // Pushes everything currently on this device up to Firestore (used the first time an account signs in with no remote data yet).
 export async function pushAllLocalData(uid: string): Promise<void> {
-  const [commitments, occurrences, categories, notes, importHistory] = await Promise.all([
+  const [commitments, occurrences, categories, notes] = await Promise.all([
     storage.getCommitments(),
     storage.getOccurrences(),
     storage.getCategories(),
     storage.getNotes(),
-    storage.getImportHistory(),
   ]);
 
   const batch = writeBatch(db);
@@ -81,6 +77,5 @@ export async function pushAllLocalData(uid: string): Promise<void> {
   occurrences.forEach((o) => batch.set(userDoc(uid, 'occurrences', o.id), sanitize(o)));
   categories.forEach((cat) => batch.set(userDoc(uid, 'categories', cat.id), sanitize(cat)));
   notes.forEach((n) => batch.set(userDoc(uid, 'notes', n.id), sanitize(n)));
-  importHistory.forEach((h) => batch.set(userDoc(uid, 'importHistory', h.id), sanitize(h)));
   await batch.commit();
 }

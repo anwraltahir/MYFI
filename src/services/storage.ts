@@ -1,4 +1,4 @@
-import { Commitment, Occurrence, Category, NoteItem, ImportHistoryItem, UserSettings, PaymentStatus } from '../types';
+import { Commitment, Occurrence, Category, NoteItem, UserSettings, PaymentStatus } from '../types';
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../utils/constants';
 
 const DB_NAME = 'EltizamatiDB';
@@ -9,7 +9,6 @@ interface DBSchema {
   occurrences: Occurrence;
   categories: Category;
   notes: NoteItem;
-  importHistory: ImportHistoryItem;
   settings: UserSettings;
 }
 
@@ -19,12 +18,11 @@ const LS_KEYS = {
   OCCURRENCES: 'eltizamati_occurrences',
   CATEGORIES: 'eltizamati_categories',
   NOTES: 'eltizamati_notes',
-  IMPORT_HISTORY: 'eltizamati_import_history',
   SETTINGS: 'eltizamati_settings',
   LAST_BACKUP: 'eltizamati_last_backup',
 };
 
-export type SyncCollection = 'commitments' | 'occurrences' | 'categories' | 'notes' | 'importHistory';
+export type SyncCollection = 'commitments' | 'occurrences' | 'categories' | 'notes';
 export type SyncChangeEvent =
   | { collection: SyncCollection; op: 'put'; id: string; data: any }
   | { collection: SyncCollection; op: 'delete'; id: string };
@@ -75,9 +73,6 @@ class StorageService {
           }
           if (!db.objectStoreNames.contains('notes')) {
             db.createObjectStore('notes', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('importHistory')) {
-            db.createObjectStore('importHistory', { keyPath: 'id' });
           }
           if (!db.objectStoreNames.contains('meta')) {
             db.createObjectStore('meta', { keyPath: 'key' });
@@ -262,21 +257,21 @@ class StorageService {
         await this.saveCategory(cat);
       }
 
-      // Sample initial archived note from Zoho Notebook
+      // Sample initial archived notes
       const sampleNotes: NoteItem[] = [
         {
-          id: 'note-zoho-sample-1',
+          id: 'note-sample-1',
           title: 'عقد الإيجار وحساب المالك 2026',
           content: 'رقم الآيبان: QA12QNBA00000000123456789\nاسم المالك: أبو راشد\nيتم التحويل أول كل شهر ميلادي بمبلغ 2000 ريال.',
           notebook: 'الالتزامات السكنية',
           tags: ['إيجار', 'سكن', 'سداد'],
           createdAt: '2026-01-01T08:00:00.000Z',
           updatedAt: '2026-01-01T08:00:00.000Z',
-          source: 'zoho',
+          source: 'manual',
           convertedToCommitmentId: 'comm-1',
         },
         {
-          id: 'note-zoho-sample-2',
+          id: 'note-sample-2',
           title: 'ملاحظات اشتراكات البرامج والترفيه',
           content: 'نتفلكس: تم التجديد السنوي\nسبوتيفاي: ملغى مؤقتاً\nتطبيق القرآن: مجاني',
           notebook: 'المصروفات العامة',
@@ -287,7 +282,7 @@ class StorageService {
           ],
           createdAt: '2025-11-15T14:20:00.000Z',
           updatedAt: '2025-11-15T14:20:00.000Z',
-          source: 'zoho',
+          source: 'manual',
         },
       ];
 
@@ -456,7 +451,7 @@ class StorageService {
     this.notifyChange({ collection: 'categories', op: 'put', id: category.id, data: category });
   }
 
-  // --- Notes (Archive & Zoho) ---
+  // --- Notes (Archive) ---
   public async getNotes(): Promise<NoteItem[]> {
     try {
       const db = await this.initDB();
@@ -513,46 +508,6 @@ class StorageService {
     this.notifyChange({ collection: 'notes', op: 'delete', id });
   }
 
-  // --- Import History ---
-  public async getImportHistory(): Promise<ImportHistoryItem[]> {
-    try {
-      const db = await this.initDB();
-      if (db) {
-        return new Promise((resolve) => {
-          const tx = db.transaction('importHistory', 'readonly');
-          const store = tx.objectStore('importHistory');
-          const req = store.getAll();
-          req.onsuccess = () => resolve(req.result || []);
-          req.onerror = () => resolve(this.getImportHistoryLS());
-        });
-      }
-    } catch {
-      // ignore
-    }
-    return this.getImportHistoryLS();
-  }
-
-  private getImportHistoryLS(): ImportHistoryItem[] {
-    const raw = localStorage.getItem(LS_KEYS.IMPORT_HISTORY);
-    return raw ? JSON.parse(raw) : [];
-  }
-
-  public async addImportHistory(item: ImportHistoryItem): Promise<void> {
-    try {
-      const db = await this.initDB();
-      if (db) {
-        const tx = db.transaction('importHistory', 'readwrite');
-        tx.objectStore('importHistory').put(item);
-      }
-    } catch {
-      // ignore
-    }
-    const list = this.getImportHistoryLS();
-    list.unshift(item);
-    localStorage.setItem(LS_KEYS.IMPORT_HISTORY, JSON.stringify(list));
-    this.notifyChange({ collection: 'importHistory', op: 'put', id: item.id, data: item });
-  }
-
   // --- Settings ---
   public getSettings(): UserSettings {
     const raw = localStorage.getItem(LS_KEYS.SETTINGS);
@@ -563,7 +518,7 @@ class StorageService {
     localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(settings));
   }
 
-  // --- Snapshot & Undo for Zoho Import ---
+  // --- Snapshot & Undo for JSON backup restore ---
   public async createBackupSnapshot(): Promise<void> {
     const snapshot = {
       commitments: await this.getCommitments(),
@@ -609,7 +564,6 @@ class StorageService {
       occurrences: await this.getOccurrences(),
       categories: await this.getCategories(),
       notes: await this.getNotes(),
-      importHistory: await this.getImportHistory(),
       settings: this.getSettings(),
     };
     return JSON.stringify(data, null, 2);
@@ -637,9 +591,6 @@ class StorageService {
       if (Array.isArray(data.notes)) {
         for (const n of data.notes) await this.saveNote(n);
       }
-      if (Array.isArray(data.importHistory)) {
-        for (const h of data.importHistory) await this.addImportHistory(h);
-      }
       if (data.settings) {
         this.saveSettings(data.settings);
       }
@@ -654,11 +605,10 @@ class StorageService {
     try {
       const db = await this.initDB();
       if (db) {
-        const tx = db.transaction(['commitments', 'occurrences', 'notes', 'importHistory'], 'readwrite');
+        const tx = db.transaction(['commitments', 'occurrences', 'notes'], 'readwrite');
         tx.objectStore('commitments').clear();
         tx.objectStore('occurrences').clear();
         tx.objectStore('notes').clear();
-        tx.objectStore('importHistory').clear();
       }
     } catch {
       // ignore
@@ -666,7 +616,6 @@ class StorageService {
     localStorage.removeItem(LS_KEYS.COMMITMENTS);
     localStorage.removeItem(LS_KEYS.OCCURRENCES);
     localStorage.removeItem(LS_KEYS.NOTES);
-    localStorage.removeItem(LS_KEYS.IMPORT_HISTORY);
     if (clearBackup) {
       localStorage.removeItem(LS_KEYS.LAST_BACKUP);
     }

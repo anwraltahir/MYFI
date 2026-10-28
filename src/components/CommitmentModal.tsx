@@ -312,7 +312,7 @@ export const CommitmentModal: React.FC<CommitmentModalProps> = ({
             </div>
           </div>
 
-          {/* Notes (Inspired by Zoho Notebook simplicity) */}
+          {/* Notes */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
               {t.modal.notesLabel}
