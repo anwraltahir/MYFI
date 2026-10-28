@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { translations, Language } from '../utils/translations';
 import { UserSettings } from '../types';
 import { CURRENCIES } from '../utils/constants';
@@ -47,6 +47,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   );
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [exportNotice, setExportNotice] = useState(false);
+  const [zohoTestCount, setZohoTestCount] = useState(0);
+  const [isCleaningZohoTest, setIsCleaningZohoTest] = useState(false);
+  const [cleanupDone, setCleanupDone] = useState(false);
+
+  const KEPT_SEED_NOTE_IDS = new Set(['note-zoho-sample-1', 'note-zoho-sample-2']);
+
+  const countZohoTestData = async () => {
+    const [commitments, notes] = await Promise.all([storage.getCommitments(), storage.getNotes()]);
+    const testCommitments = commitments.filter((c) => c.id.startsWith('comm-from-zoho-'));
+    const testNotes = notes.filter((n) => !n.id.startsWith('manual-note-') && !KEPT_SEED_NOTE_IDS.has(n.id));
+    setZohoTestCount(testCommitments.length + testNotes.length);
+  };
+
+  useEffect(() => {
+    countZohoTestData();
+  }, []);
+
+  const handleCleanupZohoTestData = async () => {
+    setIsCleaningZohoTest(true);
+    try {
+      const [commitments, notes] = await Promise.all([storage.getCommitments(), storage.getNotes()]);
+      const testCommitments = commitments.filter((c) => c.id.startsWith('comm-from-zoho-'));
+      for (const c of testCommitments) {
+        await storage.deleteCommitment(c.id);
+      }
+      const testNotes = notes.filter((n) => !n.id.startsWith('manual-note-') && !KEPT_SEED_NOTE_IDS.has(n.id));
+      for (const n of testNotes) {
+        await storage.deleteNote(n.id);
+      }
+      onDataImported();
+      await countZohoTestData();
+      setCleanupDone(true);
+      setTimeout(() => setCleanupDone(false), 4000);
+    } finally {
+      setIsCleaningZohoTest(false);
+    }
+  };
 
   const handleLanguageChange = (newLang: Language) => {
     onUpdateSettings({ ...settings, language: newLang });
@@ -396,6 +433,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <ShieldAlert className="w-4 h-4" />
           <h3 className="text-sm font-bold">{t.settings.dangerZone}</h3>
         </div>
+
+        {zohoTestCount > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-rose-100">
+            <div>
+              <div className="text-xs font-bold text-slate-800">
+                {lang === 'ar' ? 'تنظيف بيانات تجربة استيراد Zoho' : 'Clean up Zoho import test data'}
+              </div>
+              <div className="text-[11px] text-slate-400 max-w-sm">
+                {lang === 'ar'
+                  ? `تم رصد ${zohoTestCount} عنصر من محاولات استيراد سابقة (قبل إصلاح المزامنة). هذا يحذفها فقط، بدون المساس بأي بيانات أضفتها يدوياً.`
+                  : `${zohoTestCount} items detected from earlier import test runs (before the sync fix). This only removes those, your manually added data is untouched.`}
+              </div>
+              {cleanupDone && (
+                <div className="text-[11px] text-emerald-600 font-bold mt-1">
+                  {lang === 'ar' ? 'تم التنظيف بنجاح ✓' : 'Cleaned up successfully ✓'}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleCleanupZohoTestData}
+              disabled={isCleaningZohoTest}
+              className="px-4 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200 transition shrink-0 disabled:opacity-60"
+            >
+              {isCleaningZohoTest
+                ? lang === 'ar'
+                  ? 'جاري التنظيف...'
+                  : 'Cleaning up...'
+                : lang === 'ar'
+                ? 'تنظيف الآن'
+                : 'Clean up now'}
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
