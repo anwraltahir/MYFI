@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#042f2e" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6" />
+      <stop offset="100%" stop-color="#2dd4bf" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  
+  <!-- Subtle inner card glow -->
+  <rect x="56" y="56" width="400" height="400" rx="96" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.1" stroke-width="4" />
+  
+  <!-- Notebook / Checklist silhouette -->
+  <rect x="110" y="110" width="292" height="292" rx="36" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.2" stroke-width="6" />
+  
+  <!-- Ribbon / Bookmark Header -->
+  <rect x="150" y="150" width="160" height="24" rx="8" fill="url(#accentGrad)" />
+  
+  <!-- Checklist Row 1: Checked -->
+  <circle cx="170" cy="225" r="18" fill="#10b981" />
+  <path d="M162 225 L168 231 L178 219" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="204" y="217" width="150" height="16" rx="6" fill="#ffffff" fill-opacity="0.9" />
+
+  <!-- Checklist Row 2: Checked -->
+  <circle cx="170" cy="285" r="18" fill="#10b981" />
+  <path d="M162 285 L168 291 L178 279" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="204" y="277" width="120" height="16" rx="6" fill="#ffffff" fill-opacity="0.9" />
+
+  <!-- Checklist Row 3: Pending/Active with Coin/QAR badge -->
+  <circle cx="170" cy="345" r="18" fill="#f59e0b" fill-opacity="0.2" stroke="#f59e0b" stroke-width="4" />
+  <rect x="204" y="337" width="170" height="16" rx="6" fill="#ffffff" fill-opacity="0.5" />
+</svg>

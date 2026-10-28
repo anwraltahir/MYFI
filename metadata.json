@@ -1,0 +1,8 @@
+{
+  "name": "التزاماتي",
+  "description": "إدارة التزاماتك الشهرية بسهولة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
