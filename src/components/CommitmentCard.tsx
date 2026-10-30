@@ -77,83 +77,80 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
     }
   }
 
-  const actionsMenu = (
+  const menuActions: { icon: typeof Edit2; label: string; onClick: () => void; danger?: boolean }[] = [
+    { icon: Edit2, label: t.commitmentActions.edit, onClick: () => onEdit(commitment) },
+    { icon: Copy, label: t.commitmentActions.duplicate, onClick: () => onDuplicate(commitment) },
+    {
+      icon: Pin,
+      label: commitment.isPinned ? t.commitmentActions.unpin : t.commitmentActions.pin,
+      onClick: () => onTogglePin(commitment),
+    },
+    {
+      icon: Calendar,
+      label: t.commitmentActions.changePaymentDate,
+      onClick: () => onEditPaymentDate(commitment, occurrence),
+    },
+    {
+      icon: Power,
+      label: commitment.isActive ? t.commitmentActions.disable : t.commitmentActions.enable,
+      onClick: () => onToggleActive(commitment),
+    },
+    { icon: Trash2, label: t.commitmentActions.delete, onClick: () => onDelete(commitment), danger: true },
+  ];
+
+  const handleMenuAction = (action: () => void) => {
+    setMenuOpen(false);
+    action();
+  };
+
+  // Desktop/tablet: inline dropdown anchored to the trigger button.
+  const actionsDropdown = (
     <>
       <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
       <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-1.5 w-48 bg-white rounded-2xl border border-slate-200 shadow-xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-xs font-medium">
-        {/* Edit */}
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            onEdit(commitment);
-          }}
-          className="w-full px-3 py-2 text-start flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition"
-        >
-          <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-          <span>{t.commitmentActions.edit}</span>
-        </button>
+        {menuActions.map((a) => (
+          <React.Fragment key={a.label}>
+            {a.danger && <div className="h-px bg-slate-100 my-1" />}
+            <button
+              onClick={() => handleMenuAction(a.onClick)}
+              className={`w-full px-3 py-2 text-start flex items-center gap-2 transition ${
+                a.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <a.icon className={`w-3.5 h-3.5 ${a.danger ? '' : 'text-slate-400'}`} />
+              <span>{a.label}</span>
+            </button>
+          </React.Fragment>
+        ))}
+      </div>
+    </>
+  );
 
-        {/* Duplicate */}
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            onDuplicate(commitment);
-          }}
-          className="w-full px-3 py-2 text-start flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition"
-        >
-          <Copy className="w-3.5 h-3.5 text-slate-400" />
-          <span>{t.commitmentActions.duplicate}</span>
-        </button>
-
-        {/* Pin / Unpin */}
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            onTogglePin(commitment);
-          }}
-          className="w-full px-3 py-2 text-start flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition"
-        >
-          <Pin className="w-3.5 h-3.5 text-slate-400" />
-          <span>{commitment.isPinned ? t.commitmentActions.unpin : t.commitmentActions.pin}</span>
-        </button>
-
-        {/* Change Payment Date / Note */}
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            onEditPaymentDate(commitment, occurrence);
-          }}
-          className="w-full px-3 py-2 text-start flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition"
-        >
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span>{t.commitmentActions.changePaymentDate}</span>
-        </button>
-
-        {/* Toggle Active */}
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            onToggleActive(commitment);
-          }}
-          className="w-full px-3 py-2 text-start flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition"
-        >
-          <Power className="w-3.5 h-3.5 text-slate-400" />
-          <span>{commitment.isActive ? t.commitmentActions.disable : t.commitmentActions.enable}</span>
-        </button>
-
-        <div className="h-px bg-slate-100 my-1" />
-
-        {/* Delete */}
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            onDelete(commitment);
-          }}
-          className="w-full px-3 py-2 text-start flex items-center gap-2 text-rose-600 hover:bg-rose-50 transition"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>{t.commitmentActions.delete}</span>
-        </button>
+  // Mobile: a bottom sheet instead of an inline dropdown, since the narrow
+  // 2-column tiles don't have room for a right-anchored popover without it
+  // overflowing onto the neighboring card.
+  const actionsSheet = (
+    <>
+      <div className="fixed inset-0 z-50 bg-slate-900/40" onClick={() => setMenuOpen(false)} />
+      <div className="fixed bottom-0 inset-x-0 z-50 bg-white rounded-t-3xl shadow-2xl pb-[max(env(safe-area-inset-bottom),12px)] animate-in slide-in-from-bottom duration-200">
+        <div className="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mt-3 mb-1" />
+        <div className="px-4 pt-1 pb-2.5 text-sm font-bold text-slate-800 truncate border-b border-slate-100">
+          {commitment.title}
+        </div>
+        <div className="p-2">
+          {menuActions.map((a) => (
+            <button
+              key={a.label}
+              onClick={() => handleMenuAction(a.onClick)}
+              className={`w-full px-3 py-3 text-start flex items-center gap-3 rounded-2xl transition text-sm font-medium ${
+                a.danger ? 'text-rose-600 active:bg-rose-50' : 'text-slate-700 active:bg-slate-50'
+              }`}
+            >
+              <a.icon className={`w-4 h-4 ${a.danger ? '' : 'text-slate-400'}`} />
+              <span>{a.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </>
   );
@@ -206,7 +203,7 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
               >
                 <MoreVertical className="w-3.5 h-3.5" />
               </button>
-              {menuOpen && actionsMenu}
+              {menuOpen && actionsSheet}
             </div>
           </div>
         </div>
@@ -312,7 +309,7 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
                 <MoreVertical className="w-4 h-4" />
               </button>
 
-              {menuOpen && actionsMenu}
+              {menuOpen && actionsDropdown}
             </div>
           </div>
         </div>
