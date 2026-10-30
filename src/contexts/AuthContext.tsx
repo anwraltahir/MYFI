@@ -39,10 +39,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         setSyncing(true);
         try {
-          const hadRemoteData = await pullRemoteData(firebaseUser.uid);
-          if (!hadRemoteData) {
-            await pushAllLocalData(firebaseUser.uid);
-          }
+          // Two-way reconcile on every load: pull remote changes in first
+          // (and apply any deletions), then push this device's current
+          // state up so local-only items actually reach the cloud too.
+          await pullRemoteData(firebaseUser.uid);
+          await pushAllLocalData(firebaseUser.uid);
         } catch (e) {
           console.warn('Initial sync failed', e);
         } finally {
