@@ -94,16 +94,5 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
-    build: {
-      rollupOptions: {
-        // TEMPORARY: migrate.html is a disposable one-time data-migration
-        // page, not part of the regular app. Remove this entry (and
-        // migrate.html/migrate.tsx/migrate-data.ts) once the import has run.
-        input: {
-          main: path.resolve(__dirname, 'index.html'),
-          migrate: path.resolve(__dirname, 'migrate.html'),
-        },
-      },
-    },
   };
 });
