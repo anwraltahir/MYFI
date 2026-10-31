@@ -59,22 +59,21 @@ export async function pullRemoteData(uid: string): Promise<boolean> {
   for (const col of COLLECTIONS) {
     const snap = await getDocs(collection(db, 'users', uid, col));
     if (!snap.empty) hadAny = true;
-    for (const d of snap.docs) {
-      if (tombstoned.has(`${col}_${d.id}`)) continue;
-      const data = d.data();
-      switch (col) {
-        case 'commitments':
-          await storage.saveCommitment(data as any);
-          break;
-        case 'occurrences':
-          await storage.saveOccurrence(data as any);
-          break;
-        case 'categories':
-          await storage.saveCategory(data as any);
-          break;
-        case 'notes':
-          await storage.saveNote(data as any);
-          break;
+    const docs = snap.docs.filter((d) => !tombstoned.has(`${col}_${d.id}`));
+
+    // Commitments/occurrences can run into the hundreds (e.g. after a
+    // historical import) — saving them one at a time was the main reason
+    // sync felt stuck, since each save re-reads and re-writes all of
+    // localStorage. Bulk-save writes the whole batch once instead.
+    if (col === 'commitments') {
+      await storage.saveCommitmentsBulk(docs.map((d) => d.data() as any));
+    } else if (col === 'occurrences') {
+      await storage.saveOccurrencesBulk(docs.map((d) => d.data() as any));
+    } else {
+      for (const d of docs) {
+        const data = d.data();
+        if (col === 'categories') await storage.saveCategory(data as any);
+        else if (col === 'notes') await storage.saveNote(data as any);
       }
     }
   }
@@ -111,10 +110,20 @@ export async function pushAllLocalData(uid: string): Promise<void> {
     storage.getNotes(),
   ]);
 
-  const batch = writeBatch(db);
-  commitments.forEach((c) => batch.set(userDoc(uid, 'commitments', c.id), sanitize(c)));
-  occurrences.forEach((o) => batch.set(userDoc(uid, 'occurrences', o.id), sanitize(o)));
-  categories.forEach((cat) => batch.set(userDoc(uid, 'categories', cat.id), sanitize(cat)));
-  notes.forEach((n) => batch.set(userDoc(uid, 'notes', n.id), sanitize(n)));
-  await batch.commit();
+  const writes: { ref: ReturnType<typeof userDoc>; data: any }[] = [];
+  commitments.forEach((c) => writes.push({ ref: userDoc(uid, 'commitments', c.id), data: sanitize(c) }));
+  occurrences.forEach((o) => writes.push({ ref: userDoc(uid, 'occurrences', o.id), data: sanitize(o) }));
+  categories.forEach((cat) => writes.push({ ref: userDoc(uid, 'categories', cat.id), data: sanitize(cat) }));
+  notes.forEach((n) => writes.push({ ref: userDoc(uid, 'notes', n.id), data: sanitize(n) }));
+
+  // Firestore caps a single batch at 500 operations, so large accounts
+  // (e.g. after a historical import) must be split into several batches.
+  const CHUNK_SIZE = 450;
+  for (let i = 0; i < writes.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    for (const w of writes.slice(i, i + CHUNK_SIZE)) {
+      batch.set(w.ref, w.data);
+    }
+    await batch.commit();
+  }
 }

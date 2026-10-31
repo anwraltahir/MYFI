@@ -42,8 +42,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Two-way reconcile on every load: pull remote changes in first
           // (and apply any deletions), then push this device's current
           // state up so local-only items actually reach the cloud too.
-          await pullRemoteData(firebaseUser.uid);
-          await pushAllLocalData(firebaseUser.uid);
+          // Bounded by a timeout so a slow/stuck network call can never
+          // block the app from loading indefinitely — background sync
+          // (started below) keeps reconciling afterward regardless.
+          const timeout = (ms: number) =>
+            new Promise<void>((_, reject) => setTimeout(() => reject(new Error('sync timeout')), ms));
+          await Promise.race([
+            (async () => {
+              await pullRemoteData(firebaseUser.uid);
+              await pushAllLocalData(firebaseUser.uid);
+            })(),
+            timeout(15000),
+          ]);
         } catch (e) {
           console.warn('Initial sync failed', e);
         } finally {

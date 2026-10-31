@@ -2,6 +2,7 @@ import React from 'react';
 import { translations, Language } from '../utils/translations';
 import { Commitment, Occurrence, Category } from '../types';
 import { BarChart3, TrendingUp, Award, CheckCircle2, AlertTriangle, Calendar } from 'lucide-react';
+import { getEffectiveCommitment } from '../utils/commitmentOverrides';
 
 interface AnalyticsViewProps {
   commitments: Commitment[];
@@ -21,6 +22,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const t = translations[lang];
   const [currentYear] = currentYearMonth.split('-').map(Number);
   const currency = commitments[0]?.currency || 'QAR';
+  const now = new Date();
+  const realCurrentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   // Calculate annual metrics for currentYear
   const activeCommitments = commitments.filter((c) => c.isActive);
@@ -53,19 +56,37 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
     for (const comm of activeCommitments) {
       const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === ym);
-      const amt = occ?.customAmount ?? comm.amount;
-      mTotal += amt;
+      if (occ?.removed) {
+        continue;
+      }
+      if (comm.frequency === 'one_time' && !occ) {
+        continue;
+      }
+      if (!occ && comm.createdAt && comm.createdAt.slice(0, 7) > ym) {
+        continue;
+      }
+      const effective = getEffectiveCommitment(comm, occ);
+      const isPaid = occ?.status === 'paid';
 
-      if (!categoryYearlySpend[comm.category]) {
-        categoryYearlySpend[comm.category] = 0;
+      // Past months are closed: unpaid items from before the real current
+      // month are no longer tracked as owed, so they don't inflate totals.
+      if (!isPaid && ym < realCurrentYm) {
+        continue;
       }
 
-      if (occ?.status === 'paid') {
+      const amt = effective.amount;
+      mTotal += amt;
+
+      if (!categoryYearlySpend[effective.category]) {
+        categoryYearlySpend[effective.category] = 0;
+      }
+
+      if (isPaid) {
         mPaid += amt;
         yearlyPaid += amt;
         totalPaidCount++;
-        categoryYearlySpend[comm.category] += amt;
-      } else if (occ?.status === 'overdue' || ym < currentYearMonth) {
+        categoryYearlySpend[effective.category] += amt;
+      } else if (ym === realCurrentYm && now.getDate() > effective.dueDay) {
         totalOverdueCount++;
       }
     }

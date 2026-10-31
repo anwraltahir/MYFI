@@ -2,6 +2,7 @@ import React from 'react';
 import { translations, Language } from '../utils/translations';
 import { Commitment, Occurrence, Category } from '../types';
 import { CheckCircle2, AlertTriangle, ArrowUpRight, TrendingUp, PieChart, ShieldCheck } from 'lucide-react';
+import { getEffectiveCommitment } from '../utils/commitmentOverrides';
 
 interface DashboardViewProps {
   commitments: Commitment[];
@@ -25,7 +26,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Calculate statistics for current month
   const activeCommitments = commitments.filter((c) => c.isActive);
-  const totalAmount = activeCommitments.reduce((sum, c) => sum + c.amount, 0);
+  let calculatedTotal = 0;
 
   const now = new Date();
   const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -35,6 +36,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   let paidCount = 0;
   let overdueAmount = 0;
   let overdueCount = 0;
+  let relevantCount = 0;
 
   const categoryTotals: Record<string, { amount: number; paid: number; nameAr: string; nameEn: string; icon: string }> = {};
 
@@ -51,19 +53,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   for (const comm of activeCommitments) {
     const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === currentYearMonth);
-    const effectiveAmount = occ?.customAmount ?? comm.amount;
+    if (occ?.removed) {
+      continue;
+    }
+    if (comm.frequency === 'one_time' && !occ) {
+      continue;
+    }
+    if (!occ && comm.createdAt && comm.createdAt.slice(0, 7) > currentYearMonth) {
+      continue;
+    }
+    const effective = getEffectiveCommitment(comm, occ);
+    const isPaid = occ?.status === 'paid';
 
-    let isPaid = occ?.status === 'paid';
+    // Past months are closed: unpaid items from before the real current
+    // month are no longer tracked as owed, so they don't inflate "remaining".
+    if (!isPaid && currentYearMonth < currentYm) {
+      continue;
+    }
+
+    const effectiveAmount = effective.amount;
+    calculatedTotal += effectiveAmount;
+    relevantCount++;
+
     let isOverdue = false;
-
-    if (!isPaid) {
-      if (occ?.status === 'overdue') {
-        isOverdue = true;
-      } else if (currentYearMonth < currentYm) {
-        isOverdue = true;
-      } else if (currentYearMonth === currentYm && currentDay > comm.dueDay) {
-        isOverdue = true;
-      }
+    if (!isPaid && currentYearMonth === currentYm && currentDay > effective.dueDay) {
+      isOverdue = true;
     }
 
     if (isPaid) {
@@ -74,21 +88,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       overdueCount++;
     }
 
-    if (!categoryTotals[comm.category]) {
-      categoryTotals[comm.category] = {
+    if (!categoryTotals[effective.category]) {
+      categoryTotals[effective.category] = {
         amount: 0,
         paid: 0,
-        nameAr: comm.category,
-        nameEn: comm.category,
+        nameAr: effective.category,
+        nameEn: effective.category,
         icon: '📦',
       };
     }
-    categoryTotals[comm.category].amount += effectiveAmount;
+    categoryTotals[effective.category].amount += effectiveAmount;
     if (isPaid) {
-      categoryTotals[comm.category].paid += effectiveAmount;
+      categoryTotals[effective.category].paid += effectiveAmount;
     }
   }
 
+  const totalAmount = calculatedTotal;
   const remainingAmount = Math.max(0, totalAmount - paidAmount);
   const percentage = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
   const currency = commitments[0]?.currency || 'QAR';
@@ -159,7 +174,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-xs text-slate-400 font-medium ml-1">{currency}</span>
             {totalAmount.toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">{activeCommitments.length} {lang === 'ar' ? 'التزام' : 'items'}</div>
+          <div className="text-[11px] text-slate-400 mt-1">{relevantCount} {lang === 'ar' ? 'التزام' : 'items'}</div>
         </div>
 
         {/* Paid */}
@@ -179,7 +194,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-xs text-slate-400 font-medium ml-1">{currency}</span>
             {remainingAmount.toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">{activeCommitments.length - paidCount} {lang === 'ar' ? 'متبقي' : 'pending'}</div>
+          <div className="text-[11px] text-slate-400 mt-1">{relevantCount - paidCount} {lang === 'ar' ? 'متبقي' : 'pending'}</div>
         </div>
 
         {/* Overdue */}

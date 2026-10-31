@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo, useTransition } from 'react';
 import { Commitment, Occurrence, Category, NoteItem, UserSettings, PaymentStatus } from './types';
 import { storage } from './services/storage';
+import { getEffectiveCommitment, OVERRIDABLE_COMMITMENT_FIELDS, CommitmentOverrideFields } from './utils/commitmentOverrides';
 import { notificationService } from './services/notifications';
 import { translations, Language } from './utils/translations';
 import { Header } from './components/Header';
@@ -36,10 +37,13 @@ export default function App() {
 }
 
 function AuthGate() {
-  const { user, loading, syncing } = useAuth();
+  const { user, loading } = useAuth();
   const lang: Language = storage.getSettings().language || 'ar';
 
-  if (loading || syncing) return <SplashScreen lang={lang} syncing={syncing} />;
+  // Only the (fast, local) auth-state check blocks rendering. Cloud sync
+  // runs in the background afterward and must never hold up the app on a
+  // slow connection — local-first means local data shows immediately.
+  if (loading) return <SplashScreen lang={lang} syncing={false} />;
   if (!user) return <LoginScreen lang={lang} />;
   return <AppContent />;
 }
@@ -134,23 +138,35 @@ function AppContent() {
     let overdue = 0;
     let paidCount = 0;
     let overdueCount = 0;
+    let totalCount = 0;
 
     for (const comm of activeCommitments) {
       const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === currentYearMonth);
-      const effectiveAmount = occ?.customAmount ?? comm.amount;
+      if (occ?.removed) {
+        continue;
+      }
+      if (comm.frequency === 'one_time' && !occ) {
+        continue;
+      }
+      if (!occ && comm.createdAt && comm.createdAt.slice(0, 7) > currentYearMonth) {
+        continue;
+      }
+      const effective = getEffectiveCommitment(comm, occ);
+      const isPaid = occ?.status === 'paid';
+
+      // Past months are closed: unpaid items from before the real current
+      // month are no longer tracked as owed, so they don't inflate "remaining".
+      if (!isPaid && currentYearMonth < realCurrentYm) {
+        continue;
+      }
+
+      const effectiveAmount = effective.amount;
       total += effectiveAmount;
+      totalCount++;
 
-      let isPaid = occ?.status === 'paid';
       let isOverdue = false;
-
-      if (!isPaid) {
-        if (occ?.status === 'overdue') {
-          isOverdue = true;
-        } else if (currentYearMonth < realCurrentYm) {
-          isOverdue = true;
-        } else if (currentYearMonth === realCurrentYm && currentDay > comm.dueDay) {
-          isOverdue = true;
-        }
+      if (!isPaid && currentYearMonth === realCurrentYm && currentDay > effective.dueDay) {
+        isOverdue = true;
       }
 
       if (isPaid) {
@@ -167,7 +183,7 @@ function AppContent() {
       paidAmount: paid,
       remainingAmount: Math.max(0, total - paid),
       overdueAmount: overdue,
-      totalCount: activeCommitments.length,
+      totalCount,
       paidCount,
       overdueCount,
     };
@@ -176,33 +192,45 @@ function AppContent() {
   // Filtered & Sorted Commitments
   const visibleCommitments = useMemo(() => {
     return activeCommitments
-      .filter((comm) => {
+      .map((comm) => {
+        const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === currentYearMonth);
+        return { comm, occ, effective: getEffectiveCommitment(comm, occ) };
+      })
+      .filter(({ comm, occ, effective }) => {
+        if (occ?.removed) {
+          return false;
+        }
+        if (comm.frequency === 'one_time' && !occ) {
+          return false;
+        }
+        if (!occ && comm.createdAt && comm.createdAt.slice(0, 7) > currentYearMonth) {
+          return false;
+        }
+        // Past months are closed: unpaid items from before the real current
+        // month are no longer tracked, so they don't show up as leftover.
+        if (occ?.status !== 'paid' && currentYearMonth < realCurrentYm) {
+          return false;
+        }
+
         // Search filter
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
-          const matchTitle = comm.title.toLowerCase().includes(q);
-          const matchNotes = comm.notes?.toLowerCase().includes(q);
+          const matchTitle = effective.title.toLowerCase().includes(q);
+          const matchNotes = effective.notes?.toLowerCase().includes(q);
           if (!matchTitle && !matchNotes) return false;
         }
 
         // Category filter
-        if (categoryFilter !== 'all' && comm.category !== categoryFilter) {
+        if (categoryFilter !== 'all' && effective.category !== categoryFilter) {
           return false;
         }
 
         // Status filter
         if (statusFilter !== 'all') {
-          const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === currentYearMonth);
-          let effectiveStatus: PaymentStatus = occ?.status || 'unpaid';
+          let effectiveStatus: PaymentStatus = occ?.status === 'paid' ? 'paid' : 'unpaid';
 
-          if (effectiveStatus !== 'paid') {
-            if (occ?.status === 'overdue') {
-              effectiveStatus = 'overdue';
-            } else if (currentYearMonth < realCurrentYm) {
-              effectiveStatus = 'overdue';
-            } else if (currentYearMonth === realCurrentYm && currentDay > comm.dueDay) {
-              effectiveStatus = 'overdue';
-            }
+          if (effectiveStatus !== 'paid' && currentYearMonth === realCurrentYm && currentDay > effective.dueDay) {
+            effectiveStatus = 'overdue';
           }
 
           if (effectiveStatus !== statusFilter) return false;
@@ -210,6 +238,7 @@ function AppContent() {
 
         return true;
       })
+      .map(({ effective }) => effective)
       .sort((a, b) => {
         // Pinned always on top
         if (a.isPinned && !b.isPinned) return -1;
@@ -262,13 +291,56 @@ function AppContent() {
 
   const handleSaveCommitment = async (data: Omit<Commitment, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (editingCommitment) {
-      const updated: Commitment = {
-        ...editingCommitment,
-        ...data,
+      // `base` is the untouched recurring template (never merged with any
+      // month's overrides) — diffing against it, not against the possibly
+      // already-overridden `editingCommitment`, keeps edits from compounding.
+      const base = commitments.find((c) => c.id === editingCommitment.id) ?? editingCommitment;
+
+      // Structural fields (how/whether it recurs, pin order) describe the
+      // whole series, so they apply everywhere — not just this month.
+      const updatedBase: Commitment = {
+        ...base,
+        frequency: data.frequency,
+        isPinned: data.isPinned,
         updatedAt: new Date().toISOString(),
       };
-      await storage.saveCommitment(updated);
-      setCommitments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      await storage.saveCommitment(updatedBase);
+      setCommitments((prev) => prev.map((c) => (c.id === updatedBase.id ? updatedBase : c)));
+
+      // Content fields (title, amount, due day, category, icon, notes) are
+      // scoped to the month being viewed: store them on this month's
+      // occurrence only, so previous and following months are unaffected.
+      const overrides: CommitmentOverrideFields = {};
+      for (const key of OVERRIDABLE_COMMITMENT_FIELDS) {
+        if (data[key] !== base[key]) {
+          (overrides as any)[key] = data[key];
+        }
+      }
+
+      const occId = `${editingCommitment.id}_${currentYearMonth}`;
+      const existingOcc = occurrences.find((o) => o.id === occId);
+      const updatedOcc: Occurrence = {
+        id: occId,
+        commitmentId: editingCommitment.id,
+        yearMonth: currentYearMonth,
+        status: existingOcc?.status ?? 'unpaid',
+        paidAt: existingOcc?.paidAt ?? null,
+        paymentNote: existingOcc?.paymentNote,
+        customAmount: existingOcc?.customAmount,
+        manuallyOverridden: existingOcc?.manuallyOverridden,
+        removed: existingOcc?.removed,
+        overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
+      };
+      await storage.saveOccurrence(updatedOcc);
+      setOccurrences((prev) => {
+        const idx = prev.findIndex((o) => o.id === occId);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = updatedOcc;
+          return copy;
+        }
+        return [...prev, updatedOcc];
+      });
     } else {
       const created: Commitment = {
         ...data,
@@ -294,22 +366,51 @@ function AppContent() {
   };
 
   const handleTogglePin = async (commitment: Commitment) => {
-    const updated = { ...commitment, isPinned: !commitment.isPinned, updatedAt: new Date().toISOString() };
+    // `commitment` may be the current month's effective (override-merged)
+    // view — always spread from the untouched base record so a month-scoped
+    // title/amount override never leaks into the shared template.
+    const base = commitments.find((c) => c.id === commitment.id) ?? commitment;
+    const updated = { ...base, isPinned: !commitment.isPinned, updatedAt: new Date().toISOString() };
     await storage.saveCommitment(updated);
     setCommitments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   };
 
   const handleToggleActive = async (commitment: Commitment) => {
-    const updated = { ...commitment, isActive: !commitment.isActive, updatedAt: new Date().toISOString() };
+    const base = commitments.find((c) => c.id === commitment.id) ?? commitment;
+    const updated = { ...base, isActive: !commitment.isActive, updatedAt: new Date().toISOString() };
     await storage.saveCommitment(updated);
     setCommitments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   };
 
   const handleDeleteCommitment = async () => {
     if (!deletingCommitment) return;
-    await storage.deleteCommitment(deletingCommitment.id);
-    setCommitments((prev) => prev.filter((c) => c.id !== deletingCommitment.id));
-    setOccurrences((prev) => prev.filter((o) => o.commitmentId !== deletingCommitment.id));
+    // Deleting is scoped to the month being viewed: mark this month's
+    // occurrence as removed instead of deleting the recurring Commitment,
+    // so previous and following months keep showing it untouched.
+    const occId = `${deletingCommitment.id}_${currentYearMonth}`;
+    const existingOcc = occurrences.find((o) => o.id === occId);
+    const updatedOcc: Occurrence = {
+      id: occId,
+      commitmentId: deletingCommitment.id,
+      yearMonth: currentYearMonth,
+      status: existingOcc?.status ?? 'unpaid',
+      paidAt: existingOcc?.paidAt ?? null,
+      paymentNote: existingOcc?.paymentNote,
+      customAmount: existingOcc?.customAmount,
+      manuallyOverridden: existingOcc?.manuallyOverridden,
+      overrides: existingOcc?.overrides,
+      removed: true,
+    };
+    await storage.saveOccurrence(updatedOcc);
+    setOccurrences((prev) => {
+      const idx = prev.findIndex((o) => o.id === occId);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = updatedOcc;
+        return copy;
+      }
+      return [...prev, updatedOcc];
+    });
     setDeletingCommitment(null);
   };
 
@@ -474,7 +575,7 @@ function AppContent() {
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {t.status.all} ({activeCommitments.length})
+                  {t.status.all} ({summaryStats.totalCount})
                 </button>
                 <button
                   onClick={() => setStatusFilter('unpaid')}

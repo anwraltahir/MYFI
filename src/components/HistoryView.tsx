@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { translations, Language } from '../utils/translations';
 import { Commitment, Occurrence, Category } from '../types';
 import { Calendar, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { getEffectiveCommitment } from '../utils/commitmentOverrides';
 
 interface HistoryViewProps {
   commitments: Commitment[];
@@ -64,17 +65,30 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           const isCurrent = ym === currentYearMonth;
           const isExpanded = expandedMonth === ym;
 
+          // Build this month's visible list once: skip anything deleted for
+          // this month specifically, and merge in this month's overrides so
+          // stats and the expanded detail list below agree with each other.
+          const monthCommitments = commitments
+            .filter((c) => c.isActive)
+            .map((c) => {
+              const occ = occurrences.find((o) => o.commitmentId === c.id && o.yearMonth === ym);
+              return { occ, effective: getEffectiveCommitment(c, occ) };
+            })
+            .filter(({ occ, effective }) => {
+              if (occ?.removed) return false;
+              if (effective.frequency === 'one_time' && !occ) return false;
+              if (!occ && effective.createdAt && effective.createdAt.slice(0, 7) > ym) return false;
+              return true;
+            });
+
           // Compute month stats
           let total = 0;
           let paid = 0;
           let overdue = 0;
           let paidCount = 0;
 
-          const monthCommitments = commitments.filter((c) => c.isActive);
-
-          for (const c of monthCommitments) {
-            const occ = occurrences.find((o) => o.commitmentId === c.id && o.yearMonth === ym);
-            const amt = occ?.customAmount ?? c.amount;
+          for (const { occ, effective } of monthCommitments) {
+            const amt = effective.amount;
             total += amt;
 
             if (occ?.status === 'paid') {
@@ -187,8 +201,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {monthCommitments.map((comm) => {
-                      const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === ym);
+                    {monthCommitments.map(({ occ, effective: comm }) => {
                       const isPaidItem = occ?.status === 'paid';
                       const cat = categories.find((c) => c.id === comm.category);
 
@@ -209,7 +222,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
                           <div className="text-end shrink-0 ml-2 rtl:ml-0 rtl:mr-2">
                             <div className="font-bold text-slate-800">
-                              {(occ?.customAmount ?? comm.amount).toLocaleString()} {comm.currency}
+                              {comm.amount.toLocaleString()} {comm.currency}
                             </div>
                             <div className="mt-0.5">
                               {isPaidItem ? (

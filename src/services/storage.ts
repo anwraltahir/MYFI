@@ -1,5 +1,7 @@
 import { Commitment, Occurrence, Category, NoteItem, UserSettings, PaymentStatus } from '../types';
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../utils/constants';
+import { migratedCommitments, migratedOccurrences, migratedNotes } from '../data/migratedData';
+import { historicalCommitments, historicalOccurrences } from '../data/historicalReconciliation';
 
 const DB_NAME = 'EltizamatiDB';
 const DB_VERSION = 1;
@@ -97,199 +99,163 @@ class StorageService {
 
   // --- Initial Seeding ---
   public async ensureInitialData(): Promise<void> {
+    const isMigrated = localStorage.getItem('eltizamati_zoho_migrated_v1') === 'true';
     const commitments = await this.getCommitments();
-    if (commitments.length === 0) {
-      // Seed Demo data as requested
-      const initialCommitments: Commitment[] = [
-        {
-          id: 'comm-1',
-          title: 'الإيجار السكني',
-          amount: 2000,
-          currency: 'QAR',
-          dueDay: 1,
-          category: 'housing',
-          frequency: 'monthly',
-          notes: 'تم التحويل لحساب المالك عبر بنك QNB',
-          icon: '🏠',
-          isPinned: true,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-        {
-          id: 'comm-2',
-          title: 'الكهرباء والماء (كهرماء)',
-          amount: 350,
-          currency: 'QAR',
-          dueDay: 10,
-          category: 'services',
-          frequency: 'monthly',
-          notes: 'رقم المشترك: 88492019',
-          icon: '💡',
-          isPinned: false,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-        {
-          id: 'comm-3',
-          title: 'الإنترنت المنزلي (Ooredoo)',
-          amount: 300,
-          currency: 'QAR',
-          dueDay: 15,
-          category: 'telecom',
-          frequency: 'monthly',
-          notes: 'باقة الفايبر 500 ميغابت',
-          icon: '📱',
-          isPinned: false,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-        {
-          id: 'comm-4',
-          title: 'قسط تمويل السيارة',
-          amount: 1200,
-          currency: 'QAR',
-          dueDay: 25,
-          category: 'installments',
-          frequency: 'monthly',
-          notes: 'استقطاع بنكي دوري',
-          icon: '💳',
-          isPinned: true,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-        {
-          id: 'comm-5',
-          title: 'اشتراك نتفلكس والعائلة',
-          amount: 50,
-          currency: 'QAR',
-          dueDay: 18,
-          category: 'subscriptions',
-          frequency: 'monthly',
-          notes: 'بطاقة فيزا الائتمانية',
-          icon: '🔄',
-          isPinned: false,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-        {
-          id: 'comm-6',
-          title: 'مصروفات وإعاشة الأسرة',
-          amount: 1500,
-          currency: 'QAR',
-          dueDay: 5,
-          category: 'family',
-          frequency: 'monthly',
-          notes: 'مخصص المصروف الشهري المنزلي',
-          icon: '👨‍👩‍👧',
-          isPinned: false,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-        {
-          id: 'comm-7',
-          title: 'قسط أنشطة المدرسة',
-          amount: 450,
-          currency: 'QAR',
-          dueDay: 28,
-          category: 'education',
-          frequency: 'monthly',
-          notes: 'رسوم النقل والنشاط',
-          icon: '🎓',
-          isPinned: false,
-          isActive: true,
-          createdAt: '2026-08-01T10:00:00.000Z',
-          updatedAt: '2026-08-01T10:00:00.000Z',
-        },
-      ];
 
-      for (const item of initialCommitments) {
-        await this.saveCommitment(item);
-      }
+    // If not yet migrated or empty, initialize with migrated historical data
+    if (!isMigrated || commitments.length === 0) {
+      await this.resetAllData(false);
 
-      // Initial occurrences for current month October 2026
-      // Total = 5,850 QAR
-      // Paid: Rent (2000) + Family (1200 / 1500)
-      const currentYearMonth = '2026-10';
-      const initialOccurrences: Occurrence[] = [
-        {
-          id: `comm-1_${currentYearMonth}`,
-          commitmentId: 'comm-1',
-          yearMonth: currentYearMonth,
-          status: 'paid',
-          paidAt: '2026-10-01T11:30:00.000Z',
-          paymentNote: 'تم التحويل إلى حساب المالك في موعده.',
-        },
-        {
-          id: `comm-6_${currentYearMonth}`,
-          commitmentId: 'comm-6',
-          yearMonth: currentYearMonth,
-          status: 'paid',
-          paidAt: '2026-10-05T09:15:00.000Z',
-          paymentNote: 'تم تسليم المبلغ كاملاً.',
-        },
-      ];
+      await this.saveCommitmentsBulk(migratedCommitments);
+      await this.saveOccurrencesBulk(migratedOccurrences);
 
-      for (const occ of initialOccurrences) {
-        await this.saveOccurrence(occ);
-      }
-
-      // Previous month September 2026 for rich History page demonstration
-      const prevYearMonth = '2026-09';
-      for (const item of initialCommitments) {
-        const isPaid = item.id !== 'comm-2'; // Everything paid except water/elec
-        await this.saveOccurrence({
-          id: `${item.id}_${prevYearMonth}`,
-          commitmentId: item.id,
-          yearMonth: prevYearMonth,
-          status: isPaid ? 'paid' : 'overdue',
-          paidAt: isPaid ? `2026-09-${String(item.dueDay).padStart(2, '0')}T10:00:00.000Z` : null,
-        });
-      }
-
-      // Initial Categories
       for (const cat of DEFAULT_CATEGORIES) {
         await this.saveCategory(cat);
       }
 
-      // Sample initial archived notes
-      const sampleNotes: NoteItem[] = [
-        {
-          id: 'note-sample-1',
-          title: 'عقد الإيجار وحساب المالك 2026',
-          content: 'رقم الآيبان: QA12QNBA00000000123456789\nاسم المالك: أبو راشد\nيتم التحويل أول كل شهر ميلادي بمبلغ 2000 ريال.',
-          notebook: 'الالتزامات السكنية',
-          tags: ['إيجار', 'سكن', 'سداد'],
-          createdAt: '2026-01-01T08:00:00.000Z',
-          updatedAt: '2026-01-01T08:00:00.000Z',
-          source: 'manual',
-          convertedToCommitmentId: 'comm-1',
-        },
-        {
-          id: 'note-sample-2',
-          title: 'ملاحظات اشتراكات البرامج والترفيه',
-          content: 'نتفلكس: تم التجديد السنوي\nسبوتيفاي: ملغى مؤقتاً\nتطبيق القرآن: مجاني',
-          notebook: 'المصروفات العامة',
-          tags: ['اشتراكات', 'ترفيه'],
-          checklist: [
-            { id: 'chk-1', text: 'سداد نتفلكس 50 ريال', done: true },
-            { id: 'chk-2', text: 'مراجعة فاتورة آيكلاود 11 ريال', done: false },
-          ],
-          createdAt: '2025-11-15T14:20:00.000Z',
-          updatedAt: '2025-11-15T14:20:00.000Z',
-          source: 'manual',
-        },
-      ];
-
-      for (const n of sampleNotes) {
+      for (const n of migratedNotes) {
         await this.saveNote(n);
       }
+
+      localStorage.setItem('eltizamati_zoho_migrated_v1', 'true');
+      localStorage.removeItem('eltizamati_zoho_patch_unpaid_removed');
     }
+
+    // Patch v2: remove unpaid zoho occurrences + deactivate zoho commitments (one-time cleanup)
+    const patchApplied = localStorage.getItem('eltizamati_zoho_patch_unpaid_removed') === 'true';
+    if (!patchApplied) {
+      // 1. Keep only paid occurrences from zoho (non-zoho occurrences stay untouched)
+      const allOccs = await this.getOccurrences();
+      const paidOnly = allOccs.filter(
+        (o) => o.status === 'paid' || !o.source_type || !o.source_type.startsWith('zoho')
+      );
+
+      // 2. Deactivate all zoho-migrated commitments so they stop generating new occurrences
+      const allCommits = await this.getCommitments();
+      const patchedCommits = allCommits.map((c) =>
+        c.source_type && c.source_type.startsWith('zoho') ? { ...c, isActive: false } : c
+      );
+
+      // Apply to IndexedDB
+      try {
+        const db = await this.initDB();
+        if (db) {
+          // Overwrite occurrences
+          await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('occurrences', 'readwrite');
+            const store = tx.objectStore('occurrences');
+            store.clear();
+            for (const o of paidOnly) store.put(o);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+          // Overwrite commitments
+          await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('commitments', 'readwrite');
+            const store = tx.objectStore('commitments');
+            store.clear();
+            for (const c of patchedCommits) store.put(c);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        }
+      } catch { /* ignore */ }
+
+      // Also patch localStorage
+      localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(paidOnly));
+      localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(patchedCommits));
+      localStorage.setItem('eltizamati_zoho_patch_unpaid_removed', 'true');
+    }
+
+    // Patch v3: drop duplicate commitments (same title/amount/currency) where
+    // one copy is already paid for the current month and the other isn't.
+    const dedupApplied = localStorage.getItem('eltizamati_dedup_unpaid_v1') === 'true';
+    if (!dedupApplied) {
+      const now = new Date();
+      const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const allCommits = await this.getCommitments();
+      const allOccs = await this.getOccurrences();
+
+      const groups = new Map<string, Commitment[]>();
+      for (const c of allCommits) {
+        if (!c.isActive) continue;
+        const key = `${c.title.trim()}|${c.amount}|${c.currency}`;
+        const group = groups.get(key) ?? [];
+        group.push(c);
+        groups.set(key, group);
+      }
+
+      const isPaidThisMonth = (commitmentId: string) =>
+        allOccs.some((o) => o.commitmentId === commitmentId && o.yearMonth === currentYm && o.status === 'paid');
+
+      for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        const paid = group.filter((c) => isPaidThisMonth(c.id));
+        const unpaid = group.filter((c) => !isPaidThisMonth(c.id));
+        if (paid.length > 0 && unpaid.length > 0) {
+          for (const c of unpaid) {
+            await this.deleteCommitment(c.id);
+          }
+        }
+      }
+
+      localStorage.setItem('eltizamati_dedup_unpaid_v1', 'true');
+    }
+
+    // Patch v4: permanently delete active commitments that are genuinely
+    // overdue right now (due day already passed this month, still unpaid).
+    // One-time cleanup only — does not run again, so it won't keep deleting
+    // bills every time a future due day passes.
+    const overdueDeleteApplied = localStorage.getItem('eltizamati_delete_overdue_v1') === 'true';
+    if (!overdueDeleteApplied) {
+      const now = new Date();
+      const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const currentDay = now.getDate();
+      const allCommits = await this.getCommitments();
+      const allOccs = await this.getOccurrences();
+
+      const isPaidThisMonth = (commitmentId: string) =>
+        allOccs.some((o) => o.commitmentId === commitmentId && o.yearMonth === currentYm && o.status === 'paid');
+
+      for (const c of allCommits) {
+        if (!c.isActive) continue;
+        if (isPaidThisMonth(c.id)) continue;
+        if (currentDay > c.dueDay) {
+          await this.deleteCommitment(c.id);
+        }
+      }
+
+      localStorage.setItem('eltizamati_delete_overdue_v1', 'true');
+    }
+
+    // Patch v6: historical payments reconciliation from the user's Zoho
+    // Notebook export (Oct 2023 - Sep 2026). Only checklist items explicitly
+    // checked (paid) were included — see src/data/historicalReconciliation.ts.
+    // This both restores the 10 core recurring commitments (active going
+    // forward) and backfills verified paid history as one_time commitments
+    // for everything else, so past months never show as owed/overdue.
+    // Re-checked every load (not one-time): a cloud sync pull can overwrite
+    // these commitments with an older, inactive copy, so this must keep
+    // reasserting isActive rather than running once and trusting it sticks.
+    // Only creates missing ones or flips isActive back on — never overwrites
+    // fields on a commitment that already exists, so a user edit sticks.
+    const currentCommits = await this.getCommitments();
+    const currentById = new Map(currentCommits.map((c) => [c.id, c]));
+    const commitsToUpsert: Commitment[] = [];
+    for (const c of historicalCommitments) {
+      const existing = currentById.get(c.id);
+      if (!existing) {
+        commitsToUpsert.push(c);
+      } else if (!existing.isActive) {
+        commitsToUpsert.push({ ...existing, isActive: true });
+      }
+    }
+    await this.saveCommitmentsBulk(commitsToUpsert);
+
+    const existingOccs = await this.getOccurrences();
+    const existingOccIds = new Set(existingOccs.map((o) => o.id));
+    const occsToInsert = historicalOccurrences.filter((o) => !existingOccIds.has(o.id));
+    await this.saveOccurrencesBulk(occsToInsert);
   }
 
   // --- Commitments ---
@@ -338,6 +304,35 @@ class StorageService {
     else list.push(commitment);
     localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
     this.notifyChange({ collection: 'commitments', op: 'put', id: commitment.id, data: commitment });
+  }
+
+  // Bulk upsert: one IndexedDB transaction and one localStorage write for
+  // the whole batch, instead of the per-item round trip saveCommitment does.
+  // Used by sync, where pulling hundreds of remote docs one at a time was
+  // the main cause of the slow/stuck load.
+  public async saveCommitmentsBulk(commitments: Commitment[]): Promise<void> {
+    if (commitments.length === 0) return;
+    try {
+      const db = await this.initDB();
+      if (db) {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction('commitments', 'readwrite');
+          const store = tx.objectStore('commitments');
+          for (const c of commitments) store.put(c);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    } catch (e) {
+      console.warn('DB error, using LS', e);
+    }
+    const list = this.getCommitmentsLS();
+    const byId = new Map(list.map((c) => [c.id, c]));
+    for (const c of commitments) byId.set(c.id, c);
+    localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(Array.from(byId.values())));
+    for (const c of commitments) {
+      this.notifyChange({ collection: 'commitments', op: 'put', id: c.id, data: c });
+    }
   }
 
   public async deleteCommitment(id: string): Promise<void> {
@@ -408,6 +403,32 @@ class StorageService {
     else list.push(occurrence);
     localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(list));
     this.notifyChange({ collection: 'occurrences', op: 'put', id: occurrence.id, data: occurrence });
+  }
+
+  // Bulk upsert — see saveCommitmentsBulk for why this exists.
+  public async saveOccurrencesBulk(occurrences: Occurrence[]): Promise<void> {
+    if (occurrences.length === 0) return;
+    try {
+      const db = await this.initDB();
+      if (db) {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction('occurrences', 'readwrite');
+          const store = tx.objectStore('occurrences');
+          for (const o of occurrences) store.put(o);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    } catch {
+      // ignore
+    }
+    const list = this.getOccurrencesLS();
+    const byId = new Map(list.map((o) => [o.id, o]));
+    for (const o of occurrences) byId.set(o.id, o);
+    localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(Array.from(byId.values())));
+    for (const o of occurrences) {
+      this.notifyChange({ collection: 'occurrences', op: 'put', id: o.id, data: o });
+    }
   }
 
   // --- Categories ---

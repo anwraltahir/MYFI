@@ -112,7 +112,7 @@ export const translations = {
       save: 'حفظ الالتزام',
       cancel: 'إلغاء',
       confirmDeleteTitle: 'تأكيد الحذف',
-      confirmDeleteMsg: 'هل أنت متأكد من حذف "{title}"؟ سيتم حذف جميع سجلاته السابقة أيضاً.',
+      confirmDeleteMsg: 'هل أنت متأكد من حذف "{title}"؟ سيتم حذفه من هذا الشهر فقط، ولن يؤثر ذلك على الشهور السابقة أو القادمة.',
       confirmButton: 'نعم، احذف',
     },
     dashboard: {
@@ -297,7 +297,7 @@ export const translations = {
       save: 'Save Commitment',
       cancel: 'Cancel',
       confirmDeleteTitle: 'Confirm Deletion',
-      confirmDeleteMsg: 'Are you sure you want to delete "{title}"? All monthly records will be removed.',
+      confirmDeleteMsg: 'Are you sure you want to delete "{title}"? It will only be removed from this month — other months are unaffected.',
       confirmButton: 'Yes, Delete',
     },
     dashboard: {

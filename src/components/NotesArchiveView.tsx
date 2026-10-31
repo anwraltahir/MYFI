@@ -243,6 +243,21 @@ export const NotesArchiveView: React.FC<NotesArchiveViewProps> = ({
                     {note.content}
                   </p>
 
+                  {/* Attachments if present */}
+                  {note.attachments && note.attachments.length > 0 && (
+                    <div className="mb-3 space-y-2">
+                      {note.attachments.map((att) => (
+                        <img
+                          key={att.id}
+                          src={att.url}
+                          alt={att.name}
+                          className="max-h-48 w-full object-cover rounded-2xl border border-slate-100 shadow-2xs"
+                          loading="lazy"
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   {/* Checklist if present */}
                   {note.checklist && note.checklist.length > 0 && (
                     <div className="mb-3 space-y-1.5 p-3 rounded-2xl bg-slate-50 border border-slate-100">

@@ -1,4 +1,5 @@
 import { Commitment, Occurrence } from '../types';
+import { getEffectiveCommitment } from '../utils/commitmentOverrides';
 
 export class NotificationService {
   public isSupported(): boolean {
@@ -59,22 +60,24 @@ export class NotificationService {
     for (const comm of commitments) {
       if (!comm.isActive) continue;
       const occ = occurrences.find((o) => o.commitmentId === comm.id && o.yearMonth === yearMonth);
+      if (occ?.removed) continue; // deleted for this month only
       if (occ && occ.status === 'paid') continue; // already paid
 
-      const diffDays = comm.dueDay - currentDay;
+      const effective = getEffectiveCommitment(comm, occ);
+      const diffDays = effective.dueDay - currentDay;
 
       // Due today
       if (diffDays === 0) {
-        this.sendNotification(`تذكير بموعد سداد اليوم: ${comm.title}`, {
-          body: `يستحق سداد ${comm.amount.toLocaleString()} ${comm.currency} اليوم. اضغط للسداد الآن.`,
+        this.sendNotification(`تذكير بموعد سداد اليوم: ${effective.title}`, {
+          body: `يستحق سداد ${effective.amount.toLocaleString()} ${effective.currency} اليوم. اضغط للسداد الآن.`,
           tag: `due-today-${comm.id}-${yearMonth}`,
         });
       }
       // Due in reminder days (e.g. 1, 3, or 7)
       else if (diffDays > 0 && diffDays <= reminderDays) {
         const dayLabel = diffDays === 1 ? 'غداً' : `خلال ${diffDays} أيام`;
-        this.sendNotification(`تذكير بموعد استحقاق: ${comm.title}`, {
-          body: `موعد سداد ${comm.title} (${comm.amount.toLocaleString()} ${comm.currency}) ${dayLabel}.`,
+        this.sendNotification(`تذكير بموعد استحقاق: ${effective.title}`, {
+          body: `موعد سداد ${effective.title} (${effective.amount.toLocaleString()} ${effective.currency}) ${dayLabel}.`,
           tag: `due-soon-${comm.id}-${yearMonth}`,
         });
       }

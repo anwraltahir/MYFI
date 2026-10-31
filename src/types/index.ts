@@ -1,5 +1,6 @@
 export type RecurrenceType = 'monthly' | 'weekly' | 'yearly' | 'one_time';
 export type PaymentStatus = 'unpaid' | 'paid' | 'overdue';
+export type VerificationStatus = 'verified' | 'needs_review' | 'unclassified';
 
 export interface Commitment {
   id: string;
@@ -16,6 +17,15 @@ export interface Commitment {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // Provenance fields
+  source_type?: string;
+  source_note_id?: string;
+  original_note_title?: string;
+  original_note_date?: string;
+  original_content?: string;
+  extracted_value?: number;
+  extraction_confidence?: number;
+  verification_status?: VerificationStatus;
 }
 
 export interface Occurrence {
@@ -27,6 +37,22 @@ export interface Occurrence {
   paymentNote?: string;
   customAmount?: number;
   manuallyOverridden?: boolean;
+  // Per-month edits made while viewing this occurrence's month. These shadow
+  // the parent Commitment's fields for this month only — other months keep
+  // reading the parent Commitment untouched.
+  overrides?: Partial<Pick<Commitment, 'title' | 'amount' | 'currency' | 'dueDay' | 'category' | 'icon' | 'notes'>>;
+  // This month's instance was deleted. The parent Commitment and every other
+  // month's occurrence are left alone.
+  removed?: boolean;
+  // Provenance fields
+  source_type?: string;
+  source_note_id?: string;
+  original_note_title?: string;
+  original_note_date?: string;
+  original_content?: string;
+  extracted_value?: number;
+  extraction_confidence?: number;
+  verification_status?: VerificationStatus;
 }
 
 export interface Category {
@@ -43,11 +69,13 @@ export interface NoteItem {
   content: string;
   notebook?: string;
   tags: string[];
-  checklist?: { id: string; text: string; done: boolean }[];
+  checklist?: { id: string; text: string; done: boolean }[] | null;
   createdAt: string;
   updatedAt: string;
-  source: 'manual';
+  source: 'manual' | 'zoho';
   convertedToCommitmentId?: string;
+  attachments?: { id: string; name: string; url: string; type: string }[] | null;
+  verification_status?: VerificationStatus;
 }
 
 export interface UserSettings {
