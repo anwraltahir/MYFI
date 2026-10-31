@@ -319,16 +319,15 @@ function AppContent() {
 
       const occId = `${editingCommitment.id}_${currentYearMonth}`;
       const existingOcc = occurrences.find((o) => o.id === occId);
+      // Spread the existing occurrence (if any) so fields we don't touch here
+      // — payment status, provenance/source metadata, etc. — survive the edit.
       const updatedOcc: Occurrence = {
         id: occId,
         commitmentId: editingCommitment.id,
         yearMonth: currentYearMonth,
-        status: existingOcc?.status ?? 'unpaid',
-        paidAt: existingOcc?.paidAt ?? null,
-        paymentNote: existingOcc?.paymentNote,
-        customAmount: existingOcc?.customAmount,
-        manuallyOverridden: existingOcc?.manuallyOverridden,
-        removed: existingOcc?.removed,
+        status: 'unpaid',
+        paidAt: null,
+        ...existingOcc,
         overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
       };
       await storage.saveOccurrence(updatedOcc);
@@ -393,12 +392,9 @@ function AppContent() {
       id: occId,
       commitmentId: deletingCommitment.id,
       yearMonth: currentYearMonth,
-      status: existingOcc?.status ?? 'unpaid',
-      paidAt: existingOcc?.paidAt ?? null,
-      paymentNote: existingOcc?.paymentNote,
-      customAmount: existingOcc?.customAmount,
-      manuallyOverridden: existingOcc?.manuallyOverridden,
-      overrides: existingOcc?.overrides,
+      status: 'unpaid',
+      paidAt: null,
+      ...existingOcc,
       removed: true,
     };
     await storage.saveOccurrence(updatedOcc);
