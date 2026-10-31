@@ -216,7 +216,7 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
           <span className="text-[10px] font-semibold text-slate-400 mr-1 rtl:mr-0 rtl:ml-1">
             {commitment.currency}
           </span>
-          <span>{(occurrence?.customAmount ?? commitment.amount).toLocaleString()}</span>
+          <span>{commitment.amount.toLocaleString()}</span>
         </div>
 
         <div className={`text-[10px] font-semibold mb-2.5 ${isOverdue ? 'text-rose-600' : 'text-slate-400'}`}>
@@ -295,7 +295,7 @@ export const CommitmentCard: React.FC<CommitmentCardProps> = ({
                 <span className="text-xs font-semibold text-slate-400 mr-1 rtl:mr-0 rtl:ml-1">
                   {commitment.currency}
                 </span>
-                <span>{(occurrence?.customAmount ?? commitment.amount).toLocaleString()}</span>
+                <span>{commitment.amount.toLocaleString()}</span>
               </div>
             </div>
 
