@@ -6,6 +6,13 @@ import { historicalCommitments, historicalOccurrences } from '../data/historical
 const DB_NAME = 'EltizamatiDB';
 const DB_VERSION = 1;
 
+// Local storage is not scoped by default (IndexedDB/localStorage are shared
+// by every account that ever signs in on this browser). Multiple real
+// accounts can now use this app, so every per-user database/key must be
+// namespaced by the signed-in uid — otherwise switching accounts on one
+// device leaks the previous account's data into the new one, both visually
+// and via sync pushing it into the new account's own Firestore space.
+
 interface DBSchema {
   commitments: Commitment;
   occurrences: Occurrence;
@@ -14,7 +21,11 @@ interface DBSchema {
   settings: UserSettings;
 }
 
-// LocalStorage Fallback keys
+// LocalStorage Fallback keys. COMMITMENTS/OCCURRENCES/CATEGORIES/NOTES/
+// LAST_BACKUP hold personal data and are namespaced per-uid at use (see
+// StorageService.lsKey). SETTINGS is just UI preferences (language,
+// currency, etc.) — harmless to share across accounts on one device, so it
+// stays unscoped.
 const LS_KEYS = {
   COMMITMENTS: 'eltizamati_commitments',
   OCCURRENCES: 'eltizamati_occurrences',
@@ -23,6 +34,7 @@ const LS_KEYS = {
   SETTINGS: 'eltizamati_settings',
   LAST_BACKUP: 'eltizamati_last_backup',
 };
+const UNSCOPED_LS_KEYS: string[] = [LS_KEYS.SETTINGS];
 
 export type SyncCollection = 'commitments' | 'occurrences' | 'categories' | 'notes';
 export type SyncChangeEvent =
@@ -34,11 +46,34 @@ class StorageService {
   private dbPromise: Promise<IDBDatabase> | null = null;
   private hasIndexedDB = typeof window !== 'undefined' && 'indexedDB' in window;
   private changeListener: SyncChangeListener | null = null;
+  private activeUid: string | null = null;
 
   constructor() {
     if (this.hasIndexedDB) {
       this.initDB();
     }
+  }
+
+  // Must be called (synchronously, before any other storage call) as soon as
+  // the signed-in uid is known — switches IndexedDB/localStorage to that
+  // account's own namespace so a different account's data already on this
+  // device is never read, displayed, or re-synced into the new account.
+  public setActiveUser(uid: string | null): void {
+    if (this.activeUid === uid) return;
+    this.activeUid = uid;
+    this.dbPromise = null;
+    if (this.hasIndexedDB) {
+      this.initDB();
+    }
+  }
+
+  private dbName(): string {
+    return this.activeUid ? `${DB_NAME}_u_${this.activeUid}` : DB_NAME;
+  }
+
+  private lsKey(base: string): string {
+    if (UNSCOPED_LS_KEYS.includes(base) || !this.activeUid) return base;
+    return `${base}_u_${this.activeUid}`;
   }
 
   // Lets the sync service observe local writes so it can mirror them to Firestore.
@@ -60,7 +95,7 @@ class StorageService {
 
     this.dbPromise = new Promise((resolve, reject) => {
       try {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        const request = indexedDB.open(this.dbName(), DB_VERSION);
 
         request.onupgradeneeded = (e) => {
           const db = (e.target as IDBOpenDBRequest).result;
@@ -98,7 +133,22 @@ class StorageService {
   }
 
   // --- Initial Seeding ---
-  public async ensureInitialData(): Promise<void> {
+  // seedOwnerData gates every block below: they all seed or reassert the
+  // app owner's real, hardcoded historical data (migratedData.ts /
+  // historicalReconciliation.ts). A newly signed-up account must start
+  // completely empty — it must never receive this data locally (where it'd
+  // be visible) or have it pushed into that account's own Firestore space
+  // by sync. Call with seedOwnerData=false for every non-owner account.
+  public async ensureInitialData(seedOwnerData: boolean = true): Promise<void> {
+    if (!seedOwnerData) {
+      // Only default category definitions (no personal data) — every other
+      // account/table starts empty for a brand-new, non-owner sign-up.
+      for (const cat of DEFAULT_CATEGORIES) {
+        await this.saveCategory(cat);
+      }
+      return;
+    }
+
     const isMigrated = localStorage.getItem('eltizamati_zoho_migrated_v1') === 'true';
     const commitments = await this.getCommitments();
 
@@ -162,8 +212,8 @@ class StorageService {
       } catch { /* ignore */ }
 
       // Also patch localStorage
-      localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(paidOnly));
-      localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(patchedCommits));
+      localStorage.setItem(this.lsKey(LS_KEYS.OCCURRENCES), JSON.stringify(paidOnly));
+      localStorage.setItem(this.lsKey(LS_KEYS.COMMITMENTS), JSON.stringify(patchedCommits));
       localStorage.setItem('eltizamati_zoho_patch_unpaid_removed', 'true');
     }
 
@@ -278,7 +328,7 @@ class StorageService {
   }
 
   private getCommitmentsLS(): Commitment[] {
-    const raw = localStorage.getItem(LS_KEYS.COMMITMENTS);
+    const raw = localStorage.getItem(this.lsKey(LS_KEYS.COMMITMENTS));
     return raw ? JSON.parse(raw) : [];
   }
 
@@ -302,7 +352,7 @@ class StorageService {
     const idx = list.findIndex((c) => c.id === commitment.id);
     if (idx >= 0) list[idx] = commitment;
     else list.push(commitment);
-    localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
+    localStorage.setItem(this.lsKey(LS_KEYS.COMMITMENTS), JSON.stringify(list));
     this.notifyChange({ collection: 'commitments', op: 'put', id: commitment.id, data: commitment });
   }
 
@@ -329,7 +379,7 @@ class StorageService {
     const list = this.getCommitmentsLS();
     const byId = new Map(list.map((c) => [c.id, c]));
     for (const c of commitments) byId.set(c.id, c);
-    localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(Array.from(byId.values())));
+    localStorage.setItem(this.lsKey(LS_KEYS.COMMITMENTS), JSON.stringify(Array.from(byId.values())));
     for (const c of commitments) {
       this.notifyChange({ collection: 'commitments', op: 'put', id: c.id, data: c });
     }
@@ -347,13 +397,13 @@ class StorageService {
       // ignore
     }
     const list = this.getCommitmentsLS().filter((c) => c.id !== id);
-    localStorage.setItem(LS_KEYS.COMMITMENTS, JSON.stringify(list));
+    localStorage.setItem(this.lsKey(LS_KEYS.COMMITMENTS), JSON.stringify(list));
     this.notifyChange({ collection: 'commitments', op: 'delete', id });
 
     const allOccs = this.getOccurrencesLS();
     const removedOccs = allOccs.filter((o) => o.commitmentId === id);
     const occs = allOccs.filter((o) => o.commitmentId !== id);
-    localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(occs));
+    localStorage.setItem(this.lsKey(LS_KEYS.OCCURRENCES), JSON.stringify(occs));
     for (const o of removedOccs) {
       this.notifyChange({ collection: 'occurrences', op: 'delete', id: o.id });
     }
@@ -379,7 +429,7 @@ class StorageService {
   }
 
   private getOccurrencesLS(): Occurrence[] {
-    const raw = localStorage.getItem(LS_KEYS.OCCURRENCES);
+    const raw = localStorage.getItem(this.lsKey(LS_KEYS.OCCURRENCES));
     return raw ? JSON.parse(raw) : [];
   }
 
@@ -401,7 +451,7 @@ class StorageService {
     const idx = list.findIndex((o) => o.id === occurrence.id);
     if (idx >= 0) list[idx] = occurrence;
     else list.push(occurrence);
-    localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(list));
+    localStorage.setItem(this.lsKey(LS_KEYS.OCCURRENCES), JSON.stringify(list));
     this.notifyChange({ collection: 'occurrences', op: 'put', id: occurrence.id, data: occurrence });
   }
 
@@ -425,7 +475,7 @@ class StorageService {
     const list = this.getOccurrencesLS();
     const byId = new Map(list.map((o) => [o.id, o]));
     for (const o of occurrences) byId.set(o.id, o);
-    localStorage.setItem(LS_KEYS.OCCURRENCES, JSON.stringify(Array.from(byId.values())));
+    localStorage.setItem(this.lsKey(LS_KEYS.OCCURRENCES), JSON.stringify(Array.from(byId.values())));
     for (const o of occurrences) {
       this.notifyChange({ collection: 'occurrences', op: 'put', id: o.id, data: o });
     }
@@ -450,7 +500,7 @@ class StorageService {
     } catch {
       // ignore
     }
-    const raw = localStorage.getItem(LS_KEYS.CATEGORIES);
+    const raw = localStorage.getItem(this.lsKey(LS_KEYS.CATEGORIES));
     return raw ? JSON.parse(raw) : DEFAULT_CATEGORIES;
   }
 
@@ -468,7 +518,7 @@ class StorageService {
     const idx = cats.findIndex((c) => c.id === category.id);
     if (idx >= 0) cats[idx] = category;
     else cats.push(category);
-    localStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify(cats));
+    localStorage.setItem(this.lsKey(LS_KEYS.CATEGORIES), JSON.stringify(cats));
     this.notifyChange({ collection: 'categories', op: 'put', id: category.id, data: category });
   }
 
@@ -492,7 +542,7 @@ class StorageService {
   }
 
   private getNotesLS(): NoteItem[] {
-    const raw = localStorage.getItem(LS_KEYS.NOTES);
+    const raw = localStorage.getItem(this.lsKey(LS_KEYS.NOTES));
     return raw ? JSON.parse(raw) : [];
   }
 
@@ -510,7 +560,7 @@ class StorageService {
     const idx = list.findIndex((n) => n.id === note.id);
     if (idx >= 0) list[idx] = note;
     else list.push(note);
-    localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(list));
+    localStorage.setItem(this.lsKey(LS_KEYS.NOTES), JSON.stringify(list));
     this.notifyChange({ collection: 'notes', op: 'put', id: note.id, data: note });
   }
 
@@ -525,18 +575,18 @@ class StorageService {
       // ignore
     }
     const list = this.getNotesLS().filter((n) => n.id !== id);
-    localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(list));
+    localStorage.setItem(this.lsKey(LS_KEYS.NOTES), JSON.stringify(list));
     this.notifyChange({ collection: 'notes', op: 'delete', id });
   }
 
   // --- Settings ---
   public getSettings(): UserSettings {
-    const raw = localStorage.getItem(LS_KEYS.SETTINGS);
+    const raw = localStorage.getItem(this.lsKey(LS_KEYS.SETTINGS));
     return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
   }
 
   public saveSettings(settings: UserSettings): void {
-    localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(settings));
+    localStorage.setItem(this.lsKey(LS_KEYS.SETTINGS), JSON.stringify(settings));
   }
 
   // --- Snapshot & Undo for JSON backup restore ---
@@ -548,15 +598,15 @@ class StorageService {
       categories: await this.getCategories(),
       timestamp: new Date().toISOString(),
     };
-    localStorage.setItem(LS_KEYS.LAST_BACKUP, JSON.stringify(snapshot));
+    localStorage.setItem(this.lsKey(LS_KEYS.LAST_BACKUP), JSON.stringify(snapshot));
   }
 
   public async hasBackupSnapshot(): Promise<boolean> {
-    return !!localStorage.getItem(LS_KEYS.LAST_BACKUP);
+    return !!localStorage.getItem(this.lsKey(LS_KEYS.LAST_BACKUP));
   }
 
   public async restoreLastBackup(): Promise<boolean> {
-    const raw = localStorage.getItem(LS_KEYS.LAST_BACKUP);
+    const raw = localStorage.getItem(this.lsKey(LS_KEYS.LAST_BACKUP));
     if (!raw) return false;
     try {
       const snapshot = JSON.parse(raw);
@@ -567,7 +617,7 @@ class StorageService {
         for (const o of snapshot.occurrences) await this.saveOccurrence(o);
         for (const n of snapshot.notes) await this.saveNote(n);
         for (const cat of snapshot.categories) await this.saveCategory(cat);
-        localStorage.removeItem(LS_KEYS.LAST_BACKUP);
+        localStorage.removeItem(this.lsKey(LS_KEYS.LAST_BACKUP));
         return true;
       }
     } catch (e) {
@@ -634,11 +684,11 @@ class StorageService {
     } catch {
       // ignore
     }
-    localStorage.removeItem(LS_KEYS.COMMITMENTS);
-    localStorage.removeItem(LS_KEYS.OCCURRENCES);
-    localStorage.removeItem(LS_KEYS.NOTES);
+    localStorage.removeItem(this.lsKey(LS_KEYS.COMMITMENTS));
+    localStorage.removeItem(this.lsKey(LS_KEYS.OCCURRENCES));
+    localStorage.removeItem(this.lsKey(LS_KEYS.NOTES));
     if (clearBackup) {
-      localStorage.removeItem(LS_KEYS.LAST_BACKUP);
+      localStorage.removeItem(this.lsKey(LS_KEYS.LAST_BACKUP));
     }
   }
 }

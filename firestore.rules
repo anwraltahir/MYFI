@@ -1,13 +1,13 @@
 rules_version = '2';
 
-// Single-owner app: every document this client ever writes lives under
-// users/{uid}/... (see src/services/sync.ts — userDoc()/tombstoneDoc()).
-// This is the server-side enforcement that the client-side owner-email
-// check in src/contexts/AuthContext.tsx cannot provide on its own — it
-// stops anyone with a valid Firebase ID token from reading or writing
-// another uid's path directly via the SDK or REST API, bypassing the app
-// entirely. Without this rule published in the Firebase Console, data
-// isolation exists only in the React app, not in the database.
+// Multi-tenant app: any account can sign up, and every document a client
+// ever writes lives under users/{uid}/... (see src/services/sync.ts —
+// userDoc()/tombstoneDoc()). This is the server-side enforcement that the
+// app's own client-side code cannot provide on its own — it stops anyone
+// with a valid Firebase ID token from reading or writing another uid's
+// path directly via the SDK or REST API, bypassing the app entirely.
+// Without this rule published in the Firebase Console, data isolation
+// exists only in the React app, not in the database.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid}/{document=**} {

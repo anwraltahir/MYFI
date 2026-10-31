@@ -38,7 +38,6 @@ export const translations = {
         'auth/popup-closed-by-user': 'تم إغلاق نافذة تسجيل الدخول قبل الإكمال.',
         'auth/unauthorized-domain': 'هذا النطاق غير مصرح له بتسجيل الدخول.',
         'auth/operation-not-allowed': 'طريقة تسجيل الدخول هذه غير مفعّلة حالياً.',
-        'auth/not-authorized': 'هذا التطبيق خاص ولا يسمح بتسجيل الدخول بحسابات أخرى.',
       },
     },
     tabs: {
@@ -224,7 +223,6 @@ export const translations = {
         'auth/popup-closed-by-user': 'Sign-in popup was closed before completing.',
         'auth/unauthorized-domain': 'This domain is not authorized for sign-in.',
         'auth/operation-not-allowed': 'This sign-in method is currently disabled.',
-        'auth/not-authorized': 'This app is private — sign-in with other accounts is not allowed.',
       },
     },
     tabs: {

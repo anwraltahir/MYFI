@@ -49,6 +49,7 @@ function AuthGate() {
 }
 
 function AppContent() {
+  const { isOwner } = useAuth();
   const [isPending, startTransition] = useTransition();
 
   // Core Data
@@ -87,7 +88,7 @@ function AppContent() {
 
   // Initialize and load data
   const loadAllData = async () => {
-    await storage.ensureInitialData();
+    await storage.ensureInitialData(isOwner);
     const [cList, oList, catList, nList] = await Promise.all([
       storage.getCommitments(),
       storage.getOccurrences(),

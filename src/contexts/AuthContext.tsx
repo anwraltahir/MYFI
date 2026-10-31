@@ -10,12 +10,14 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { pullRemoteData, pushAllLocalData, startSync, stopSync } from '../services/sync';
+import { storage } from '../services/storage';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   syncing: boolean;
   authError: string | null;
+  isOwner: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
@@ -25,20 +27,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// This is a single-user personal finance app seeded with the owner's real
-// financial data. Any other account reaching AppContent would get that data
-// handed to it locally and pushed into its own Firestore account — so no
-// session for a non-owner email may ever be allowed to stand.
+// The app's original owner, whose real financial data lives hardcoded in
+// migratedData.ts / historicalReconciliation.ts. Any other signed-in
+// account must never have that data seeded locally or synced into its own
+// Firestore space (see storage.ensureInitialData's seedOwnerData param) —
+// every other account starts completely empty.
 const OWNER_EMAIL = 'anwraltahir@gmail.com';
 
 function isOwnerEmail(email: string | null | undefined): boolean {
   return (email ?? '').trim().toLowerCase() === OWNER_EMAIL;
-}
-
-function notAuthorizedError(): Error & { code: string } {
-  const err = new Error('auth/not-authorized') as Error & { code: string };
-  err.code = 'auth/not-authorized';
-  return err;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,16 +46,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // Never let a non-owner session stand, let alone reach local storage or
-      // Firestore sync — this also covers accounts signed in before this
-      // check existed, and sessions restored from a previous browser login.
-      if (firebaseUser && !isOwnerEmail(firebaseUser.email)) {
-        await signOut(auth);
-        setAuthError(notAuthorizedError().code);
-        setUser(null);
-        setLoading(false);
-        return;
-      }
+      // Switch local storage to this account's own namespace before
+      // anything else touches it (synchronously, same tick as setUser, so
+      // it's in effect before AppContent's own data-loading effect runs).
+      storage.setActiveUser(firebaseUser ? firebaseUser.uid : null);
 
       setUser(firebaseUser);
       setLoading(false);
@@ -97,13 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     setAuthError(null);
     try {
-      const cred = await signInWithPopup(auth, googleProvider);
-      if (!isOwnerEmail(cred.user.email)) {
-        await signOut(auth);
-        const err = notAuthorizedError();
-        setAuthError(err.code);
-        throw err;
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (e: any) {
       setAuthError(e?.code || e?.message || 'Sign-in failed');
       throw e;
@@ -112,13 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithEmail = async (email: string, password: string) => {
     setAuthError(null);
-    // Checked before calling Firebase at all — a stranger typing a random
-    // email should never trigger a real auth attempt against this project.
-    if (!isOwnerEmail(email)) {
-      const err = notAuthorizedError();
-      setAuthError(err.code);
-      throw err;
-    }
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (e: any) {
@@ -129,11 +107,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUpWithEmail = async (email: string, password: string) => {
     setAuthError(null);
-    if (!isOwnerEmail(email)) {
-      const err = notAuthorizedError();
-      setAuthError(err.code);
-      throw err;
-    }
     try {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (e: any) {
@@ -163,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         syncing,
         authError,
+        isOwner: isOwnerEmail(user?.email),
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
